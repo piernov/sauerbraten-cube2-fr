@@ -884,7 +884,7 @@ namespace game
             {
                 case 0:
                 {
-                    char *text = executestr(hudelements[i]->script);
+                    char *text = executeret(hudelements[i]->script);
                     if(text)
                     {
                         if(text[0])
