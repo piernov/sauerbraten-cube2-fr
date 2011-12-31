@@ -383,6 +383,8 @@ namespace game
         }
         else
         {
+            d->attacking = false;
+            if(!restore) d->deaths++;
             d->move = d->strafe = 0;
             d->resetinterp();
             d->smoothmillis = 0;
@@ -395,8 +397,8 @@ namespace game
         if(d->state==CS_EDITING)
         {
             d->editstate = CS_DEAD;
-            if(d==player1) d->deaths++;
-            else d->resetinterp();
+            d->deaths++;
+            d->resetinterp();
             return;
         }
         else if(d->state!=CS_ALIVE || intermission) return;
