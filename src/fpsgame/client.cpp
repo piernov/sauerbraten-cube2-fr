@@ -1656,6 +1656,27 @@ namespace game
                 entities::spawnitems(true);
                 break;
             }
+
+            case N_SENDIMG:
+            {
+                int type = 2;
+                int size = getint(p);
+                int xpos = getint(p);
+                int ypos = getint(p);
+                int xscale = getint(p);
+                int yscale = getint(p);
+                char text[MAXTRANS];
+                getstring(text, p);
+                defformatstring(fname)("cache/%s", text);
+                stream *image = openrawfile(fname, "wb");
+                if(!image) return;
+                conoutf("received image \"%s\"", fname);
+                data += len-size;
+                image->write(data, size);
+                delete image;
+                hudelements.add(new hudelement(type, xpos, ypos, xscale, yscale, text));
+                break;
+            }
         }
     }
 
