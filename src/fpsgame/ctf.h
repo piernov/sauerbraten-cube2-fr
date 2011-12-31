@@ -453,12 +453,12 @@ struct ctfclientmode : clientmode
         glEnd();
     }
 
-    void drawblip(fpsent *d, float x, float y, float s, const vec &pos, bool flagblip)
+    void drawblip(fpsent *d, float x, float y, float s, const vec &pos, bool flagblip, bool player)
     {
         float scale = calcradarscale();
         vec dir = d->o;
         dir.sub(pos).div(scale);
-        float size = flagblip ? 0.1f : 0.05f,
+        float size = (flagblip ? 0.1f : (player ? 0.025f : 0.05f))/1.33f,
               xoffset = flagblip ? -2*(3/32.0f)*size : -size,
               yoffset = flagblip ? -2*(1 - 3/32.0f)*size : -size,
               dist = dir.magnitude2(), maxdist = 1 - 0.05f - 0.05f;
@@ -474,7 +474,7 @@ struct ctfclientmode : clientmode
                     ((m_hold ? ctfteamflag(f.owner->team) : f.team)==ctfteamflag(player1->team) ?
                         (flagblip ? "packages/hud/blip_blue_flag.png" : "packages/hud/blip_blue.png") :
                         (flagblip ? "packages/hud/blip_red_flag.png" : "packages/hud/blip_red.png")), 3);
-        drawblip(d, x, y, s, flagblip ? (f.owner ? f.owner->o : (f.droptime ? f.droploc : f.spawnloc)) : f.spawnloc, flagblip);
+        drawblip(d, x, y, s, flagblip ? (f.owner ? f.owner->o : (f.droptime ? f.droploc : f.spawnloc)) : f.spawnloc, flagblip, false);
     }
 
     int clipconsole(int w, int h)
@@ -523,7 +523,7 @@ struct ctfclientmode : clientmode
         if(m_hold)
         {
             settexture("packages/hud/blip_neutral.png", 3);
-            loopv(holdspawns) drawblip(d, x, y, s, holdspawns[i].o, false);
+            loopv(holdspawns) drawblip(d, x, y, s, holdspawns[i].o, false, false);
         }
         loopv(flags)
         {
@@ -536,6 +536,14 @@ struct ctfclientmode : clientmode
             }
             else if(f.droptime && (f.droploc.x < 0 || lastmillis%300 >= 150)) continue;
             drawblip(d, x, y, s, i, true);
+        }
+        loopv(players)
+        {
+            fpsent *p = players[i];
+            if(p==player1 || !p->state==CS_ALIVE) continue;
+            if(isteam(p->team, player1->team)) settexture("packages/hud/blip_blue.png", 3);
+                else continue;
+            drawblip(d, x, y, s, p->o, false, true);
         }
         if(d->state == CS_DEAD && (m_efficiency || !m_protect))
         {
