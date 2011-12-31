@@ -838,6 +838,15 @@ namespace game
             if(d->state!=CS_SPECTATOR) drawhudicons(d);
             if(cmode) cmode->drawhud(d, w, h);
         }
+        
+        glPushMatrix();
+            glScalef(2, 2, 1);
+            int val = max(maplimit - lastmillis, 0)/1000;
+            defformatstring(timeremaining)("%d:%02d", val/60, val%60);
+            defformatstring(flags)("\f4| \f0%d", hudplayer()->flags);
+            float kpd = hudplayer()->frags/float(hudplayer()->deaths?hudplayer()->deaths:1);
+            draw_textf("%s \f4| \f1%d \f4| \f3%d \f4| \f5%3.2f \f4| \f2%d%% %s", (HICON_X+5*HICON_XSTEP)/2, (HICON_TEXTY+HICON_YSTEP)/2, timeremaining, hudplayer()->frags, hudplayer()->deaths, kpd, (hudplayer()->totaldamage*100)/max(hudplayer()->totalshots, 1), (cmode ? flags : ""));
+        glPopMatrix();
 
         glPopMatrix();
     }
