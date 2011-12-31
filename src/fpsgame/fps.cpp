@@ -694,6 +694,17 @@ namespace game
         glTexCoord2f(tx+tsz, ty+tsz); glVertex2f(x+sz, y+sz);
         glEnd();
     }
+    
+    void drawimage(const char* image, float xs, float ys, float xe, float ye)
+    {
+        settexture(image);
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(xs, ys);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(xe, ys);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(xs, ye);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(xe, ye);
+        glEnd();
+    }
 
     float abovegameplayhud(int w, int h)
     {
@@ -706,6 +717,16 @@ namespace game
                 return 1650.0f/1800.0f;
         }
     }
+    
+    vector<hudelement *> hudelements;
+
+    void addhudelement(int *type, float *xpos, float *ypos, float *xscale, float *yscale, const char *script)
+    {
+        if(script[0]) hudelements.add(new hudelement(*type, *xpos, *ypos, *xscale, *yscale, script));
+    }
+    COMMAND(addhudelement, "iffffs");
+
+    ICOMMAND(listhudelements, "", (), loopv(hudelements) conoutf("%d %f %f %f %f %s", hudelements[i]->type, hudelements[i]->xpos, hudelements[i]->ypos, hudelements[i]->xscale, hudelements[i]->yscale, hudelements[i]->script));
 
     int ammohudup[3] = { GUN_CG, GUN_RL, GUN_GL },
         ammohuddown[3] = { GUN_RIFLE, GUN_SG, GUN_PISTOL },
@@ -839,6 +860,48 @@ namespace game
         {
             if(d->state!=CS_SPECTATOR) drawhudicons(d);
             if(cmode) cmode->drawhud(d, w, h);
+        }
+        
+        loopv(hudelements)
+        {
+            glPushMatrix();
+            switch(hudelements[i]->type)
+            {
+                case 0:
+                {
+                    char *text = executestr(hudelements[i]->script);
+                    if(text)
+                    {
+                        if(text[0])
+                        {
+                            glScalef(hudelements[i]->xscale, hudelements[i]->yscale, 1);
+                            draw_text(text, hudelements[i]->xpos/hudelements[i]->xscale, hudelements[i]->ypos/hudelements[i]->yscale);
+                        }
+                        DELETEA(text);
+                    }
+                    break;
+                }
+                case 1:
+                {
+                    if(hudelements[i]->script)
+                    {
+                        glScalef(hudelements[i]->xscale, hudelements[i]->yscale, 1);
+                        int id = atoi(hudelements[i]->script);
+                        drawicon(id, hudelements[i]->xpos/hudelements[i]->xscale, hudelements[i]->ypos/hudelements[i]->yscale);
+                    }
+                    break;
+                }
+                case 2:
+                {
+                    if(hudelements[i]->script)
+                    {
+                        defformatstring(fname)("cache/%s", hudelements[i]->script);
+                        drawimage(fname, hudelements[i]->xpos, hudelements[i]->ypos, hudelements[i]->xscale, hudelements[i]->yscale);
+                    }
+                    break;
+                }
+            }
+            glPopMatrix();
         }
         
         glPushMatrix();

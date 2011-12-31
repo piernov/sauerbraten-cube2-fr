@@ -594,6 +594,23 @@ struct teamscore
     }
 };
 
+struct hudelement
+{
+    int type;
+    float xpos, ypos, xscale, yscale;
+    char *script;
+
+    hudelement(int type, float xpos, float ypos, float xscale, float yscale, const char *script)
+        : type(type), xpos(xpos), ypos(ypos), xscale(xscale), yscale(yscale), script(newstring(script))
+    {
+    }
+
+    ~hudelement()
+    {
+        DELETEA(script);
+    }
+};
+
 namespace entities
 {
     extern vector<extentity *> ents;
@@ -775,6 +792,7 @@ namespace game
     extern int chooserandomplayermodel(int seed);
     extern void swayhudgun(int curtime);
     extern vec hudgunorigin(int gun, const vec &from, const vec &to, fpsent *d);
+    extern vector<hudelement *> hudelements;
 }
 
 namespace server
