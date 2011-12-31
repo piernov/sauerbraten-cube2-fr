@@ -490,13 +490,18 @@ struct ctfclientmode : clientmode
             {
                 int x = HICON_X + 3*HICON_STEP + (d->quadmillis ? HICON_SIZE + HICON_SPACE : 0);
                 drawicon(m_hold ? HICON_NEUTRAL_FLAG : (flags[i].team==ctfteamflag(d->team) ? HICON_BLUE_FLAG : HICON_RED_FLAG), x, HICON_Y);
+                glPushMatrix();
+                glScalef(2, 2, 1);
                 if(m_hold)
                 {
-                    glPushMatrix();
-                    glScalef(2, 2, 1);
                     draw_textf("%d", (x + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0));
-                    glPopMatrix();
+                    draw_textf("\f2You have a flag !\n Time left : %d", 650, 20, max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0));
                 }
+                else
+                {
+                    draw_textf("\f2You have a flag !", 650, 20);
+                }
+                glPopMatrix();
                 break;
             }
         }
