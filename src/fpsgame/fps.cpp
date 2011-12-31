@@ -847,6 +847,21 @@ namespace game
             float kpd = hudplayer()->frags/float(hudplayer()->deaths?hudplayer()->deaths:1);
             draw_textf("%s \f4| \f1%d \f4| \f3%d \f4| \f5%3.2f \f4| \f2%d%% %s", (HICON_X+5*HICON_XSTEP)/2, (HICON_TEXTY+HICON_YSTEP)/2, timeremaining, hudplayer()->frags, hudplayer()->deaths, kpd, (hudplayer()->totaldamage*100)/max(hudplayer()->totalshots, 1), (cmode ? flags : ""));
         glPopMatrix();
+        
+        glPushMatrix();
+            glScalef(0.5, 0.5, 1);
+            loopv(players)
+            {
+                fpsent *player = players[i];
+                defformatstring(flags)("\f4|\f0%d\f4|", player->flags);
+                draw_textf("%s", 1800*3, (800+i*30)*2, player->name);
+                draw_textf("\f4|\f1%d\f4|\f3%d\f4|\f2%d%%%s", 1800*3+400, (800+i*30)*2, player->frags, player->deaths, (player->totaldamage*100)/max(player->totalshots, 1), (cmode ? flags : ""));
+                if(player->state==CS_DEAD) draw_textf("\f3Dead", 1800*3+750, (800+i*30)*2);
+                if(player->state==CS_ALIVE||player->state==CS_SPAWNING) draw_textf("\f0Alive", 1800*3+750, (800+i*30)*2);
+                if(player->state==CS_SPECTATOR) draw_textf("\f4Spectator", 1800*3+750, (800+i*30)*2);
+                if(player->state==CS_EDITING) draw_textf("\f1Editing", 1800*3+750, (800+i*30)*2);
+            }
+        glPopMatrix();
 
         glPopMatrix();
     }
