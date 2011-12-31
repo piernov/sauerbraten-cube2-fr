@@ -302,9 +302,10 @@ enum
     HICON_NEUTRAL_FLAG,
 
     HICON_X       = 20,
-    HICON_Y       = 1650,
-    HICON_TEXTY   = 1644,
-    HICON_STEP    = 490,
+    HICON_Y       = 1530,
+    HICON_TEXTY   = 1524,
+    HICON_XSTEP    = 220,
+    HICON_YSTEP    = 120,
     HICON_SIZE    = 120,
     HICON_SPACE   = 40
 };

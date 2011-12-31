@@ -60,6 +60,7 @@ int rendercommand(int x, int y, int w)
     int width, height;
     text_bounds(s, width, height, w);
     y -= height;
+    y -= 190;
     draw_text(s, x, y, 0xFF, 0xFF, 0xFF, 0xFF, (commandpos>=0) ? (commandpos+1+(commandprompt?strlen(commandprompt):1)) : strlen(s), w);
     return height;
 }
@@ -150,7 +151,7 @@ int renderconsole(int w, int h, int abovehud)                   // render buffer
     
     int y = drawconlines(conskip, fullconsole ? 0 : confade, conwidth, conheight, conpad+conoff, fullconsole ? fullconfilter : confilter);
     if(!fullconsole && (miniconsize && miniconwidth))
-        drawconlines(miniconskip, miniconfade, (miniconwidth*(w - 2*(conpad + conoff)))/100, min(FONTH*miniconsize, abovehud - y), conpad+conoff, miniconfilter, abovehud, -1);
+        drawconlines(miniconskip, miniconfade, (miniconwidth*(w - 2*(conpad + conoff)))/100, min(FONTH*miniconsize, abovehud - y), conpad+conoff, miniconfilter, abovehud-190, -1);
     return fullconsole ? conheight + 2*(conpad + conoff) : y;
 }
 

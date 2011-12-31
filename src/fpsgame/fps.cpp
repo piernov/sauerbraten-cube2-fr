@@ -744,7 +744,8 @@ namespace game
 
     void drawammohud(fpsent *d)
     {
-        float x = HICON_X + 2*HICON_STEP, y = HICON_Y, sz = HICON_SIZE;
+        float x = HICON_X + 2*HICON_XSTEP, y = HICON_Y, sz = HICON_SIZE;
+        if(!d->quadmillis) y = HICON_Y+HICON_YSTEP;
         glPushMatrix();
         glScalef(1/3.2f, 1/3.2f, 1);
         float xup = (x+sz)*3.2f, yup = y*3.2f + 0.1f*sz;
@@ -787,23 +788,30 @@ namespace game
         glPushMatrix();
         glScalef(2, 2, 1);
 
-        draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->state==CS_DEAD ? 0 : d->health);
-        if(d->state!=CS_DEAD)
-        {
-            if(d->armour) draw_textf("%d", (HICON_X + HICON_STEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->armour);
-            draw_textf("%d", (HICON_X + 2*HICON_STEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->ammo[d->gunselect]);
-        }
+        if(d->armour) {
+            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY+HICON_YSTEP)/2, d->armour);
+            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->state==CS_DEAD ? 0 : d->health);}
+        else if(!m_insta) {
+            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY+HICON_YSTEP)/2, d->state==CS_DEAD ? 0 : d->health);}
+        if(d->quadmillis) {
+            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->ammo[d->gunselect]);
+            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY + HICON_YSTEP)/2, d->quadmillis/1000);}
+        else {
+            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY + HICON_YSTEP)/2, d->ammo[d->gunselect]);}
 
         glPopMatrix();
 
-        drawicon(HICON_HEALTH, HICON_X, HICON_Y);
-        if(d->state!=CS_DEAD)
-        {
-            if(d->armour) drawicon(HICON_BLUE_ARMOUR+d->armourtype, HICON_X + HICON_STEP, HICON_Y);
-            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_STEP, HICON_Y);
-            if(d->quadmillis) drawicon(HICON_QUAD, HICON_X + 3*HICON_STEP, HICON_Y);
-            if(ammohud) drawammohud(d);
-        }
+        if(d->armour) {
+            drawicon(HICON_HEALTH, HICON_X, HICON_Y);
+            drawicon(HICON_BLUE_ARMOUR+d->armourtype, HICON_X, HICON_Y+HICON_YSTEP);}
+        else if(!m_insta) {
+            drawicon(HICON_HEALTH, HICON_X, HICON_Y+HICON_YSTEP);}
+        if(d->quadmillis) {
+            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_XSTEP, HICON_Y);
+            drawicon(HICON_QUAD, HICON_X + 2*HICON_XSTEP, HICON_Y + HICON_YSTEP);}
+        else {
+            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_XSTEP, HICON_Y+HICON_YSTEP);}
+        if(ammohud && !m_insta) drawammohud(d);
     }
 
     void gameplayhud(int w, int h)
