@@ -461,6 +461,21 @@ namespace game
     ICOMMAND(getaccuracy, "", (), intret((player1->totaldamage*100)/max(player1->totalshots, 1)));
     ICOMMAND(gettotaldamage, "", (), intret(player1->totaldamage));
     ICOMMAND(gettotalshots, "", (), intret(player1->totalshots));
+    
+    int getteamscore(const char *team)
+    {
+        vector<teamscore> teamscores;
+        if(cmode) cmode->getteamscores(teamscores);
+        loopv(teamscores)
+        {
+            if(!strcmp(teamscores[i].team, team))
+            {
+                return teamscores[i].score;
+            }
+        }
+        return 0;
+    }
+    ICOMMAND(getteamscore, "s", (const char *team), intret(getteamscore(team)));
 
     vector<fpsent *> clients;
 
