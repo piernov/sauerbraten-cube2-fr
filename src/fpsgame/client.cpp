@@ -1602,6 +1602,21 @@ namespace game
                 ai::init(b, at, on, sk, bn, pm, name, team);
                 break;
             }
+            
+            case N_HUDELEMENT:
+            {
+                int type = getint(p);
+                int xpos = getint(p);
+                int ypos = getint(p);
+                char xscale[MAXTRANS];
+                getstring(xscale, p);
+                char yscale[MAXTRANS];
+                getstring(yscale, p);
+                char text[MAXTRANS];
+                getstring(text, p);
+                hudelements.add(new hudelement(type, xpos, ypos, atof(xscale), atof(yscale), text));
+                break;
+            }
 
             default:
                 neterr("type", cn < 0);
