@@ -959,7 +959,7 @@ namespace game
             defformatstring(score1)("%d", getteamscore("good"));
             int scorew, scoreh;
             text_bounds(score1, scorew, scoreh);
-            draw_textf((strcmp(player1->team, "good") ? "\f3%s" : "\f1%s"), (x+s/2)-scorew, cmode ? (y+s/2)/2+415 : (y/10), score1);
+            draw_textf((strcmp(player1->team, "good") ? "\f3%s" : "\f1%s"), (x+s/2)-40-scorew, cmode ? (y+s/2)/2+415 : (y/10), score1);
             draw_textf((strcmp(player1->team, "evil") ? "\f3%d" : "\f1%d"), (x+s/2)+40, cmode ? (y+s/2)/2+415 : (y/10), getteamscore("evil"));
         }
 

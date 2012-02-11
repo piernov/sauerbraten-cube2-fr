@@ -564,6 +564,22 @@ struct ctfclientmode : clientmode
                 glPopMatrix();
             }
         }
+        loopv(flags)
+        {
+            flag &f = flags[i];
+            if(f.droptime)
+            {
+                int flagdroptime = max(10 - (lastmillis - f.interptime)/1000, 0);
+                if(m_hold) draw_textf("%d", (x+s/2)-(flagdroptime>=10 ? 22 : 12), (y+s/2)/2+415, flagdroptime);
+                else if (f.team==ctfteamflag(player1->team)) draw_textf("\f1%d", (f.team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
+                else draw_textf("\f3%d", (f.team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
+            }
+            if(f.owner && m_hold)
+            {
+                int flaghowntime = max(HOLDSECS - (lastmillis - f.owntime)/1000, 0);
+                draw_textf((isteam(player1->team,f.owner->team) ? "\f1%d" : "\f3%d"), (strcmp(f.owner->team, "evil") ? (x+s/2)-(flaghowntime>=10 ? 180 : 155) : (x+s/2)+125), (y+s/2)/2+400, flaghowntime);
+            }
+        }
     }
 
     void removeplayer(fpsent *d)
