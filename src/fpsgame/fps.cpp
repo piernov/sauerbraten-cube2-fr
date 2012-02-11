@@ -466,6 +466,14 @@ namespace game
     {
         vector<teamscore> teamscores;
         if(cmode) cmode->getteamscores(teamscores);
+        else loopv(players) if(players[i]->team[0])
+        {
+            fpsent *player = players[i];
+            teamscore *ts = NULL;
+            loopvj(teamscores) if(!strcmp(teamscores[j].team, player->team)) { ts = &teamscores[j]; break; }
+            if(!ts) teamscores.add(teamscore(player->team, player->frags));
+            else ts->score += player->frags;
+        }
         loopv(teamscores)
         {
             if(!strcmp(teamscores[i].team, team))
@@ -475,7 +483,8 @@ namespace game
         }
         return 0;
     }
-    ICOMMAND(getteamscore, "s", (const char *team), intret(getteamscore(team)));
+   
+   ICOMMAND(getteamscore, "s", (const char *team), intret(getteamscore(team)));
 
     vector<fpsent *> clients;
 
@@ -856,6 +865,8 @@ namespace game
     {
         glPushMatrix();
         glScalef(h/1800.0f, h/1800.0f, 1);
+        
+        int s = 1800/3.5, x = 1800*w/h - s - s/10, y = s/10;
 
         if(player1->state==CS_SPECTATOR)
         {
@@ -942,6 +953,15 @@ namespace game
                 if(player->state==CS_EDITING) draw_textf("\f1Editing", 1800*3+750, (800+i*30)*2);
             }
         glPopMatrix();
+        
+        if(m_teammode) 
+        {
+            defformatstring(score1)("%d", getteamscore("good"));
+            int scorew, scoreh;
+            text_bounds(score1, scorew, scoreh);
+            draw_textf((strcmp(player1->team, "good") ? "\f3%s" : "\f1%s"), (x+s/2)-scorew, cmode ? (y+s/2)/2+415 : (y/10), score1);
+            draw_textf((strcmp(player1->team, "evil") ? "\f3%d" : "\f1%d"), (x+s/2)+40, cmode ? (y+s/2)/2+415 : (y/10), getteamscore("evil"));
+        }
 
         glPopMatrix();
     }
