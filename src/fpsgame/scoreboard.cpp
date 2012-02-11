@@ -209,15 +209,6 @@ namespace game
                 g.pushlist(); // horizontal
             }
 
-            if(!cmode || !cmode->hidefrags())
-            { 
-                g.pushlist();
-                g.strut(7);
-                g.text("frags", fgcolor);
-                loopscoregroup(o, g.textf("%d", 0xFFFFDD, NULL, o->frags));
-                g.poplist();
-            }
-
             if(multiplayer(false) || demoplayback)
             {
                 if(showpj)
@@ -237,8 +228,8 @@ namespace game
                 {
                     g.pushlist();
                     g.text("ping", fgcolor);
-                    g.strut(6);
-                    loopscoregroup(o, 
+                    g.strut(5);
+                    loopscoregroup(o,
                     {
                         fpsent *p = o->ownernum >= 0 ? getclient(o->ownernum) : o;
                         if(!p) p = o;
@@ -248,11 +239,21 @@ namespace game
                     g.poplist();
                 }
             }
+         
+            if(showclientnum || player1->privilege>=PRIV_MASTER)
+            {
+                //g.space(1);
+                g.pushlist();
+                g.text("cn", fgcolor);
+                loopscoregroup(o, g.textf("%d", 0xFFFFDD, NULL, o->clientnum));
+                g.poplist();
+            }
 
+            g.space(2);
             g.pushlist();
             g.text("name", fgcolor);
             g.strut(10);
-            loopscoregroup(o, 
+            loopscoregroup(o,
             {
                 int status = o->state!=CS_DEAD ? 0xFFFFDD : 0x606060;
                 if(o->privilege)
@@ -264,12 +265,26 @@ namespace game
             });
             g.poplist();
 
-            if(showclientnum || player1->privilege>=PRIV_MASTER)
+            g.space(1);
+            g.pushlist();
+            g.text("\f1frags", fgcolor);
+            loopscoregroup(o,
             {
-                g.space(1);
+                if(o->frags >= player1->frags) g.textf("\f5%d", 0xFFFFDD, NULL, o->frags);
+                else g.textf("\f1%d", 0xFFFFDD, NULL, (o->frags));
+            });
+            g.poplist();
+            
+            g.pushlist();
+            g.text("\f3deaths", fgcolor);
+            loopscoregroup(o, g.textf("\f3%d", 0xFFFFDD, NULL, o->deaths));
+            g.poplist();
+            
+            if(m_ctf)
+            {
                 g.pushlist();
-                g.text("cn", fgcolor);
-                loopscoregroup(o, g.textf("%d", 0xFFFFDD, NULL, o->clientnum));
+                g.text("\f0flags", fgcolor);
+                loopscoregroup(o, g.textf("\f0%d", 0xFFFFDD, NULL, o->flags));
                 g.poplist();
             }
             
