@@ -392,6 +392,8 @@ namespace game
         }
     }
 
+    VARP(autosorry, 0, 0, 1);
+
     void killed(fpsent *d, fpsent *actor)
     {
         if(d->state==CS_EDITING)
@@ -416,7 +418,16 @@ namespace game
         else if(isteam(d->team, actor->team))
         {
             contype |= CON_TEAMKILL;
-            if(actor==player1) conoutf(contype, "\f3you fragged a teammate (%s)", dname);
+            if(actor==player1)
+            {
+                conoutf(contype, "\f3you fragged a teammate (%s)", dname);
+                if(autosorry)
+                {
+                    defformatstring(autso)("Oops, I'm sorry for this teamkill %s =/", d->name);
+                    conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(player1), autso);
+                    addmsg(N_SAYTEAM, "rcs", player1, autso);
+                }
+            }
             else if(d==player1) conoutf(contype, "\f3you got fragged by a teammate (%s)", aname);
             else conoutf(contype, "\f2%s fragged a teammate (%s)", aname, dname);
         }
