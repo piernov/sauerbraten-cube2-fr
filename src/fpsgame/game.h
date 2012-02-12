@@ -196,6 +196,10 @@ enum
     S_FLAGRETURN,
     S_FLAGSCORE,
     S_FLAGRESET,
+    
+    S_TIE,
+    S_YOUWIN,
+    S_YOULOSE,
 
     S_BURN,
     S_CHAINSAW_ATTACK,
@@ -774,6 +778,7 @@ namespace game
     extern void showscores(bool on);
     extern void getbestplayers(vector<fpsent *> &best);
     extern void getbestteams(vector<const char *> &best);
+    extern int getteamscore(const char *team);
 
     // render
     struct playermodelinfo

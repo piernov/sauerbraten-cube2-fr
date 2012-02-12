@@ -451,6 +451,10 @@ namespace game
             showscores(true);
             disablezoom();
             
+            int score1 = getteamscore("good");
+            int score2 = getteamscore("evil");         
+            playsound(score1 > score2 ? (strcmp(player1->team, "good") ? S_YOULOSE : S_YOUWIN) : (score2 > score1 ? (strcmp(player1->team, "evil") ? S_YOULOSE : S_YOUWIN) : S_TIE));
+            
             if(identexists("intermission")) execute("intermission");
         }
     }
