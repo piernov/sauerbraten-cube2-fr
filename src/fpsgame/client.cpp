@@ -1212,6 +1212,7 @@ namespace game
                 s->lastaction = lastmillis;
                 s->lastattackgun = s->gunselect;
                 shoteffects(gun, from, to, s, false, id, prevaction);
+				s->totalshots += guns[s->gunselect].damage*(s->quadmillis ? 4 : 1)*(s->gunselect==GUN_SG ? SGRAYS : 1);
                 break;
             }
 
@@ -1237,6 +1238,7 @@ namespace game
                 target->health = health;
                 if(target->state == CS_ALIVE && actor != player1) target->lastpain = lastmillis;
                 damaged(damage, target, actor, false);
+				if(!actor->skill && actor != player1) actor->totaldamage += damage;
                 break;
             }
 
@@ -1602,21 +1604,6 @@ namespace game
                 ai::init(b, at, on, sk, bn, pm, name, team);
                 break;
             }
-            
-            case N_HUDELEMENT:
-            {
-                int type = getint(p);
-                int xpos = getint(p);
-                int ypos = getint(p);
-                char xscale[MAXTRANS];
-                getstring(xscale, p);
-                char yscale[MAXTRANS];
-                getstring(yscale, p);
-                char text[MAXTRANS];
-                getstring(text, p);
-                hudelements.add(new hudelement(type, xpos, ypos, atof(xscale), atof(yscale), text));
-                break;
-            }
 
             default:
                 neterr("type", cn < 0);
@@ -1669,27 +1656,6 @@ namespace game
                 load_world(mname, oldname[0] ? oldname : NULL);
                 remove(findfile(fname, "rb"));
                 entities::spawnitems(true);
-                break;
-            }
-
-            case N_SENDIMG:
-            {
-                int type = 2;
-                int size = getint(p);
-                int xpos = getint(p);
-                int ypos = getint(p);
-                int xscale = getint(p);
-                int yscale = getint(p);
-                char text[MAXTRANS];
-                getstring(text, p);
-                defformatstring(fname)("cache/%s", text);
-                stream *image = openrawfile(fname, "wb");
-                if(!image) return;
-                conoutf("received image \"%s\"", fname);
-                data += len-size;
-                image->write(data, size);
-                delete image;
-                hudelements.add(new hudelement(type, xpos, ypos, xscale, yscale, text));
                 break;
             }
         }

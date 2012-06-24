@@ -493,25 +493,6 @@ struct captureclientmode : clientmode
         glEnd();
     }
 
-    void drawplayers(fpsent *d, float x, float y, float s)
-    {
-        loopv(players)
-        {
-            fpsent *p = players[i];
-            const vec &pos = p->o;
-            if(p==player1 || !p->state==CS_ALIVE) continue;
-            if(isteam(p->team, player1->team)) settexture("packages/hud/blip_blue.png", 3);
-                else continue;
-            float scale = calcradarscale();
-            vec dir = d->o;
-            dir.sub(pos).div(scale);
-            float size = 0.025f, xoffset = -size, yoffset = -size, dist = dir.magnitude2(), maxdist = 1 - 0.05f - 0.05f;
-            if(dist >= maxdist) dir.mul(maxdist/dist);
-            dir.rotate_around_z(-camera1->yaw*RAD);
-            drawradar(x + s*0.5f*(1.0f + dir.x + xoffset), y + s*0.5f*(1.0f + dir.y + yoffset), size*s);
-        }
-    }
-
     void drawhud(fpsent *d, int w, int h)
     {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -533,7 +514,6 @@ struct captureclientmode : clientmode
         drawradar(-0.5f*rsize, -0.5f*rsize, rsize);
         glPopMatrix();
         #endif
-        drawplayers(d, x, y, s);
         bool showenemies = lastmillis%1000 >= 500;
         int fw = 1, fh = 1;
         if(basenumbers)

@@ -3,8 +3,6 @@
 #define ctfteamflag(s) (!strcmp(s, "good") ? 1 : (!strcmp(s, "evil") ? 2 : 0))
 #define ctfflagteam(i) (i==1 ? "good" : (i==2 ? "evil" : NULL))
 
-VARP(goodjob, 0, 0, 1);
-
 #ifdef SERVMODE
 struct ctfservmode : servmode
 #else
@@ -455,12 +453,12 @@ struct ctfclientmode : clientmode
         glEnd();
     }
 
-    void drawblip(fpsent *d, float x, float y, float s, const vec &pos, bool flagblip, bool player)
+    void drawblip(fpsent *d, float x, float y, float s, const vec &pos, bool flagblip)
     {
         float scale = calcradarscale();
         vec dir = d->o;
         dir.sub(pos).div(scale);
-        float size = (flagblip ? 0.1f : (player ? 0.025f : 0.05f))/1.33f,
+        float size = flagblip ? 0.1f : 0.05f,
               xoffset = flagblip ? -2*(3/32.0f)*size : -size,
               yoffset = flagblip ? -2*(1 - 3/32.0f)*size : -size,
               dist = dir.magnitude2(), maxdist = 1 - 0.05f - 0.05f;
@@ -476,7 +474,7 @@ struct ctfclientmode : clientmode
                     ((m_hold ? ctfteamflag(f.owner->team) : f.team)==ctfteamflag(player1->team) ?
                         (flagblip ? "packages/hud/blip_blue_flag.png" : "packages/hud/blip_blue.png") :
                         (flagblip ? "packages/hud/blip_red_flag.png" : "packages/hud/blip_red.png")), 3);
-        drawblip(d, x, y, s, flagblip ? (f.owner ? f.owner->o : (f.droptime ? f.droploc : f.spawnloc)) : f.spawnloc, flagblip, false);
+        drawblip(d, x, y, s, flagblip ? (f.owner ? f.owner->o : (f.droptime ? f.droploc : f.spawnloc)) : f.spawnloc, flagblip);
     }
 
     int clipconsole(int w, int h)
@@ -490,26 +488,21 @@ struct ctfclientmode : clientmode
         {
             loopv(flags) if(flags[i].owner == d)
             {
-                int x = HICON_X + (d->quadmillis ? 4 : 2) * HICON_XSTEP;
-                drawicon(m_hold ? HICON_NEUTRAL_FLAG : (flags[i].team==ctfteamflag(d->team) ? HICON_BLUE_FLAG : HICON_RED_FLAG), x, HICON_Y+(d->quadmillis ? HICON_YSTEP : 0));
-                glPushMatrix();
-                glScalef(2, 2, 1);
+                int x = HICON_X + 3*HICON_STEP + (d->quadmillis ? HICON_SIZE + HICON_SPACE : 0);
+                drawicon(m_hold ? HICON_NEUTRAL_FLAG : (flags[i].team==ctfteamflag(d->team) ? HICON_BLUE_FLAG : HICON_RED_FLAG), x, HICON_Y);
                 if(m_hold)
                 {
-                    draw_textf("%d", (x + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY+(d->quadmillis ? HICON_YSTEP : 0))/2, max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0));
-                    draw_textf("\f2You have a flag !\n Time left : %d", 650, 20, max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0));
+                    glPushMatrix();
+                    glScalef(2, 2, 1);
+                    draw_textf("%d", (x + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0));
+                    glPopMatrix();
                 }
-                else
-                {
-                    draw_textf("\f2You have a flag !", 650, 20);
-                }
-                glPopMatrix();
                 break;
             }
         }
 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        int s = 1800/3.5, x = 1800*w/h - s - s/10, y = s/10;
+        int s = 1800/4, x = 1800*w/h - s - s/10, y = s/10;
         glColor4f(1, 1, 1, minimapalpha);
         if(minimapalpha >= 1) glDisable(GL_BLEND);
         bindminimap();
@@ -530,7 +523,7 @@ struct ctfclientmode : clientmode
         if(m_hold)
         {
             settexture("packages/hud/blip_neutral.png", 3);
-            loopv(holdspawns) drawblip(d, x, y, s, holdspawns[i].o, false, false);
+            loopv(holdspawns) drawblip(d, x, y, s, holdspawns[i].o, false);
         }
         loopv(flags)
         {
@@ -544,14 +537,6 @@ struct ctfclientmode : clientmode
             else if(f.droptime && (f.droploc.x < 0 || lastmillis%300 >= 150)) continue;
             drawblip(d, x, y, s, i, true);
         }
-        loopv(players)
-        {
-            fpsent *p = players[i];
-            if(p==player1 || !p->state==CS_ALIVE) continue;
-            if(isteam(p->team, player1->team)) settexture("packages/hud/blip_blue.png", 3);
-                else continue;
-            drawblip(d, x, y, s, p->o, false, true);
-        }
         if(d->state == CS_DEAD && (m_efficiency || !m_protect))
         {
             int wait = respawnwait(d);
@@ -562,22 +547,6 @@ struct ctfclientmode : clientmode
                 bool flash = wait>0 && d==player1 && lastspawnattempt>=d->lastpain && lastmillis < lastspawnattempt+100;
                 draw_textf("%s%d", (x+s/2)/2-(wait>=10 ? 28 : 16), (y+s/2)/2-32, flash ? "\f3" : "", wait);
                 glPopMatrix();
-            }
-        }
-        loopv(flags)
-        {
-            flag &f = flags[i];
-            if(f.droptime)
-            {
-                int flagdroptime = max(10 - (lastmillis - f.interptime)/1000, 0);
-                if(m_hold) draw_textf("%d", (x+s/2)-(flagdroptime>=10 ? 22 : 12), (y+s/2)/2+415, flagdroptime);
-                else if (f.team==ctfteamflag(player1->team)) draw_textf("\f1%d", (f.team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
-                else draw_textf("\f3%d", (f.team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
-            }
-            if(f.owner && m_hold)
-            {
-                int flaghowntime = max(HOLDSECS - (lastmillis - f.owntime)/1000, 0);
-                draw_textf((isteam(player1->team,f.owner->team) ? "\f1%d" : "\f3%d"), (strcmp(f.owner->team, "evil") ? (x+s/2)-(flaghowntime>=10 ? 180 : 155) : (x+s/2)+125), (y+s/2)/2+400, flaghowntime);
             }
         }
     }
@@ -882,13 +851,6 @@ struct ctfclientmode : clientmode
         d->flags = dflags;
         conoutf(CON_GAMEINFO, "%s scored for %s team", d==player1 ? "you" : colorname(d), team==ctfteamflag(player1->team) ? "your" : "the enemy");
         playsound(S_FLAGSCORE);
-        
-        if(goodjob && isteam(player1->team, d->team) && d!=player1)
-        {
-            defformatstring(msg)("Good job %s", d->name);
-            conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(player1), msg);
-            addmsg(N_SAYTEAM, "rcs", player1, msg);
-        }
 
         if(score >= FLAGLIMIT) conoutf(CON_GAMEINFO, "%s team captured %d flags", team==ctfteamflag(player1->team) ? "your" : "the enemy", score);
     }

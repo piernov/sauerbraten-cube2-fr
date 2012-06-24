@@ -2,6 +2,11 @@
 
 namespace game
 {
+    VARP(goodgame, 0, 0, 1);
+    VARP(autosorry, 0, 0, 1);
+    VARP(playerwhokilled, 0, 0, 127);
+    VARP(playerniceshot, 0, 0, 127);
+
     bool intermission = false;
     int maptime = 0, maprealtime = 0, maplimit = -1;
     int respawnent = -1;
@@ -255,7 +260,7 @@ namespace game
             else if(lastmillis-player1->lastpain<2000)
             {
                 player1->move = player1->strafe = 0;
-                moveplayer(player1, 10, true);
+                moveplayer(player1, 10, false);
             }
         }
         else if(!intermission)
@@ -367,12 +372,12 @@ namespace game
 
     void deathstate(fpsent *d, bool restore)
     {
-        d->state = CS_DEAD;
+		d->state = CS_DEAD;
         d->lastpain = lastmillis;
         if(!restore) gibeffect(max(-d->health, 0), d->vel, d);
         if(d==player1)
         {
-            if(deathscore) showscores(true);
+			if(deathscore) showscores(true);
             disablezoom();
             if(!restore) loopi(NUMGUNS) savedammo[i] = player1->ammo[i];
             d->attacking = false;
@@ -383,16 +388,13 @@ namespace game
         }
         else
         {
-            d->attacking = false;
             if(!restore) d->deaths++;
-            d->move = d->strafe = 0;
+			d->move = d->strafe = 0;
             d->resetinterp();
             d->smoothmillis = 0;
             playsound(S_DIE1+rnd(2), &d->o);
         }
     }
-
-    VARP(autosorry, 0, 0, 1);
 
     void killed(fpsent *d, fpsent *actor)
     {
@@ -418,7 +420,7 @@ namespace game
         else if(isteam(d->team, actor->team))
         {
             contype |= CON_TEAMKILL;
-            if(actor==player1)
+            if(actor==player1) 
             {
                 conoutf(contype, "\f3you fragged a teammate (%s)", dname);
                 if(autosorry)
@@ -428,16 +430,25 @@ namespace game
                     addmsg(N_SAYTEAM, "rcs", player1, autso);
                 }
             }
-            else if(d==player1) conoutf(contype, "\f3you got fragged by a teammate (%s)", aname);
+            else if(d==player1) 
+            {
+                conoutf(contype, "\f3you got fragged by a teammate (%s)", aname);
+                playerwhokilled = actor->clientnum;
+            }
             else conoutf(contype, "\f2%s fragged a teammate (%s)", aname, dname);
         }
         else
         {
-            if(d==player1) conoutf(contype, "\f2you got fragged by %s", aname);
+            if(d==player1)
+            {
+                conoutf(contype, "\f2you got fragged by %s", aname);
+                playerniceshot = actor->clientnum;
+            }
+            else if(actor==player1) conoutf(contype, "\f2you fraged %s", dname);
             else conoutf(contype, "\f2%s fragged %s", aname, dname);
         }
         deathstate(d);
-		ai::killed(d, actor);
+        ai::killed(d, actor);
     }
 
     void timeupdate(int secs)
@@ -451,6 +462,12 @@ namespace game
             intermission = true;
             player1->attacking = false;
             if(cmode) cmode->gameover();
+            if(goodgame && player1->state!=CS_SPECTATOR && player1->state!=CS_EDITING)
+            {
+                defformatstring(gogatt)("Good game !");
+                conoutf(CON_CHAT, "%s:\f0 %s", colorname(player1), gogatt);
+                addmsg(N_TEXT, "rcs", player1, gogatt);
+            }
             conoutf(CON_GAMEINFO, "\f2intermission:");
             conoutf(CON_GAMEINFO, "\f2game has ended!");
             if(m_ctf) conoutf(CON_GAMEINFO, "\f2player frags: %d, flags: %d, deaths: %d", player1->frags, player1->flags, player1->deaths);
@@ -462,10 +479,6 @@ namespace game
             showscores(true);
             disablezoom();
             
-            int score1 = getteamscore("good");
-            int score2 = getteamscore("evil");         
-            playsound(score1 > score2 ? (strcmp(player1->team, "good") ? S_YOULOSE : S_YOUWIN) : (score2 > score1 ? (strcmp(player1->team, "evil") ? S_YOULOSE : S_YOUWIN) : S_TIE));
-            
             if(identexists("intermission")) execute("intermission");
         }
     }
@@ -476,30 +489,6 @@ namespace game
     ICOMMAND(getaccuracy, "", (), intret((player1->totaldamage*100)/max(player1->totalshots, 1)));
     ICOMMAND(gettotaldamage, "", (), intret(player1->totaldamage));
     ICOMMAND(gettotalshots, "", (), intret(player1->totalshots));
-    
-    int getteamscore(const char *team)
-    {
-        vector<teamscore> teamscores;
-        if(cmode) cmode->getteamscores(teamscores);
-        else loopv(players) if(players[i]->team[0])
-        {
-            fpsent *player = players[i];
-            teamscore *ts = NULL;
-            loopvj(teamscores) if(!strcmp(teamscores[j].team, player->team)) { ts = &teamscores[j]; break; }
-            if(!ts) teamscores.add(teamscore(player->team, player->frags));
-            else ts->score += player->frags;
-        }
-        loopv(teamscores)
-        {
-            if(!strcmp(teamscores[i].team, team))
-            {
-                return teamscores[i].score;
-            }
-        }
-        return 0;
-    }
-   
-   ICOMMAND(getteamscore, "s", (const char *team), intret(getteamscore(team)));
 
     vector<fpsent *> clients;
 
@@ -733,17 +722,6 @@ namespace game
         glTexCoord2f(tx+tsz, ty+tsz); glVertex2f(x+sz, y+sz);
         glEnd();
     }
-    
-    void drawimage(const char* image, float xs, float ys, float xe, float ye)
-    {
-        settexture(image);
-        glBegin(GL_TRIANGLE_STRIP);
-        glTexCoord2f(0.0f, 0.0f); glVertex2f(xs, ys);
-        glTexCoord2f(1.0f, 0.0f); glVertex2f(xe, ys);
-        glTexCoord2f(0.0f, 1.0f); glVertex2f(xs, ye);
-        glTexCoord2f(1.0f, 1.0f); glVertex2f(xe, ye);
-        glEnd();
-    }
 
     float abovegameplayhud(int w, int h)
     {
@@ -756,16 +734,6 @@ namespace game
                 return 1650.0f/1800.0f;
         }
     }
-    
-    vector<hudelement *> hudelements;
-
-    void addhudelement(int *type, float *xpos, float *ypos, float *xscale, float *yscale, const char *script)
-    {
-        if(script[0]) hudelements.add(new hudelement(*type, *xpos, *ypos, *xscale, *yscale, script));
-    }
-    COMMAND(addhudelement, "iffffs");
-
-    ICOMMAND(listhudelements, "", (), loopv(hudelements) conoutf("%d %f %f %f %f %s", hudelements[i]->type, hudelements[i]->xpos, hudelements[i]->ypos, hudelements[i]->xscale, hudelements[i]->yscale, hudelements[i]->script));
 
     int ammohudup[3] = { GUN_CG, GUN_RL, GUN_GL },
         ammohuddown[3] = { GUN_RIFLE, GUN_SG, GUN_PISTOL },
@@ -806,8 +774,7 @@ namespace game
 
     void drawammohud(fpsent *d)
     {
-        float x = HICON_X + 2*HICON_XSTEP, y = HICON_Y, sz = HICON_SIZE;
-        if(!d->quadmillis) y = HICON_Y+HICON_YSTEP;
+        float x = HICON_X + 2*HICON_STEP, y = HICON_Y, sz = HICON_SIZE;
         glPushMatrix();
         glScalef(1/3.2f, 1/3.2f, 1);
         float xup = (x+sz)*3.2f, yup = y*3.2f + 0.1f*sz;
@@ -850,38 +817,29 @@ namespace game
         glPushMatrix();
         glScalef(2, 2, 1);
 
-        if(d->armour) {
-            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY+HICON_YSTEP)/2, d->armour);
-            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->state==CS_DEAD ? 0 : d->health);}
-        else if(!m_insta) {
-            draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY+HICON_YSTEP)/2, d->state==CS_DEAD ? 0 : d->health);}
-        if(d->quadmillis) {
-            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->ammo[d->gunselect]);
-            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY + HICON_YSTEP)/2, d->quadmillis/1000);}
-        else {
-            draw_textf("%d", (HICON_X + 2*HICON_XSTEP + HICON_SIZE + HICON_SPACE)/2, (HICON_TEXTY + HICON_YSTEP)/2, d->ammo[d->gunselect]);}
+        draw_textf("%d", (HICON_X + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->state==CS_DEAD ? 0 : d->health);
+        if(d->state!=CS_DEAD)
+        {
+            if(d->armour) draw_textf("%d", (HICON_X + HICON_STEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->armour);
+            draw_textf("%d", (HICON_X + 2*HICON_STEP + HICON_SIZE + HICON_SPACE)/2, HICON_TEXTY/2, d->ammo[d->gunselect]);
+        }
 
         glPopMatrix();
 
-        if(d->armour) {
-            drawicon(HICON_HEALTH, HICON_X, HICON_Y);
-            drawicon(HICON_BLUE_ARMOUR+d->armourtype, HICON_X, HICON_Y+HICON_YSTEP);}
-        else if(!m_insta) {
-            drawicon(HICON_HEALTH, HICON_X, HICON_Y+HICON_YSTEP);}
-        if(d->quadmillis) {
-            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_XSTEP, HICON_Y);
-            drawicon(HICON_QUAD, HICON_X + 2*HICON_XSTEP, HICON_Y + HICON_YSTEP);}
-        else {
-            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_XSTEP, HICON_Y+HICON_YSTEP);}
-        if(ammohud && !m_insta) drawammohud(d);
+        drawicon(HICON_HEALTH, HICON_X, HICON_Y);
+        if(d->state!=CS_DEAD)
+        {
+            if(d->armour) drawicon(HICON_BLUE_ARMOUR+d->armourtype, HICON_X + HICON_STEP, HICON_Y);
+            drawicon(HICON_FIST+d->gunselect, HICON_X + 2*HICON_STEP, HICON_Y);
+            if(d->quadmillis) drawicon(HICON_QUAD, HICON_X + 3*HICON_STEP, HICON_Y);
+            if(ammohud) drawammohud(d);
+        }
     }
 
     void gameplayhud(int w, int h)
     {
         glPushMatrix();
         glScalef(h/1800.0f, h/1800.0f, 1);
-        
-        int s = 1800/3.5, x = 1800*w/h - s - s/10, y = s/10;
 
         if(player1->state==CS_SPECTATOR)
         {
@@ -901,81 +859,6 @@ namespace game
         {
             if(d->state!=CS_SPECTATOR) drawhudicons(d);
             if(cmode) cmode->drawhud(d, w, h);
-        }
-        
-        loopv(hudelements)
-        {
-            glPushMatrix();
-            switch(hudelements[i]->type)
-            {
-                case 0:
-                {
-                    char *text = executeret(hudelements[i]->script);
-                    if(text)
-                    {
-                        if(text[0])
-                        {
-                            glScalef(hudelements[i]->xscale, hudelements[i]->yscale, 1);
-                            draw_text(text, hudelements[i]->xpos/hudelements[i]->xscale, hudelements[i]->ypos/hudelements[i]->yscale);
-                        }
-                        DELETEA(text);
-                    }
-                    break;
-                }
-                case 1:
-                {
-                    if(hudelements[i]->script)
-                    {
-                        glScalef(hudelements[i]->xscale, hudelements[i]->yscale, 1);
-                        int id = atoi(hudelements[i]->script);
-                        drawicon(id, hudelements[i]->xpos/hudelements[i]->xscale, hudelements[i]->ypos/hudelements[i]->yscale);
-                    }
-                    break;
-                }
-                case 2:
-                {
-                    if(hudelements[i]->script)
-                    {
-                        defformatstring(fname)("cache/%s", hudelements[i]->script);
-                        drawimage(fname, hudelements[i]->xpos, hudelements[i]->ypos, hudelements[i]->xscale, hudelements[i]->yscale);
-                    }
-                    break;
-                }
-            }
-            glPopMatrix();
-        }
-        
-        glPushMatrix();
-            glScalef(2, 2, 1);
-            int val = max(maplimit - lastmillis, 0)/1000;
-            defformatstring(timeremaining)("%d:%02d", val/60, val%60);
-            defformatstring(flags)("\f4| \f0%d", hudplayer()->flags);
-            float kpd = hudplayer()->frags/float(hudplayer()->deaths?hudplayer()->deaths:1);
-            draw_textf("%s \f4| \f1%d \f4| \f3%d \f4| \f5%3.2f \f4| \f2%d%% %s", (HICON_X+5*HICON_XSTEP)/2, (HICON_TEXTY+HICON_YSTEP)/2, timeremaining, hudplayer()->frags, hudplayer()->deaths, kpd, (hudplayer()->totaldamage*100)/max(hudplayer()->totalshots, 1), (cmode ? flags : ""));
-        glPopMatrix();
-        
-        glPushMatrix();
-            glScalef(0.5, 0.5, 1);
-            loopv(players)
-            {
-                fpsent *player = players[i];
-                defformatstring(flags)("\f4|\f0%d\f4|", player->flags);
-                draw_textf("%s", 1800*3, (800+i*30)*2, player->name);
-                draw_textf("\f4|\f1%d\f4|\f3%d\f4|\f2%d%%%s", 1800*3+400, (800+i*30)*2, player->frags, player->deaths, (player->totaldamage*100)/max(player->totalshots, 1), (cmode ? flags : ""));
-                if(player->state==CS_DEAD) draw_textf("\f3Dead", 1800*3+750, (800+i*30)*2);
-                if(player->state==CS_ALIVE||player->state==CS_SPAWNING) draw_textf("\f0Alive", 1800*3+750, (800+i*30)*2);
-                if(player->state==CS_SPECTATOR) draw_textf("\f4Spectator", 1800*3+750, (800+i*30)*2);
-                if(player->state==CS_EDITING) draw_textf("\f1Editing", 1800*3+750, (800+i*30)*2);
-            }
-        glPopMatrix();
-        
-        if(m_teammode) 
-        {
-            defformatstring(score1)("%d", getteamscore("good"));
-            int scorew, scoreh;
-            text_bounds(score1, scorew, scoreh);
-            draw_textf((strcmp(player1->team, "good") ? "\f3%s" : "\f1%s"), (x+s/2)-40-scorew, cmode ? (y+s/2)/2+415 : (y/10), score1);
-            draw_textf((strcmp(player1->team, "evil") ? "\f3%d" : "\f1%d"), (x+s/2)+40, cmode ? (y+s/2)/2+415 : (y/10), getteamscore("evil"));
         }
 
         glPopMatrix();
