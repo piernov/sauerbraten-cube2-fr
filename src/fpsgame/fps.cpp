@@ -3,11 +3,14 @@
 namespace game
 {
     VARP(goodgame, 0, 0, 1);
-    VARP(autosorry, 0, 0, 1);
-    VARP(playerwhokilled, 0, 0, 127);
-    VARP(playerniceshot, 0, 0, 127);
-
-    bool intermission = false;
+	VARP(autosorry, 0, 0, 1);
+	VARP(playerwhokilled, 0, 0, 127);
+	VARP(playerniceshot, 0, 0, 127);
+	VARP(playerslist, 0, 0, 1);
+	extern int flagplayer1;
+	extern int flagplayer2;
+	
+	bool intermission = false;
     int maptime = 0, maprealtime = 0, maplimit = -1;
     int respawnent = -1;
     int lasthit = 0, lastspawnattempt = 0;
@@ -421,35 +424,59 @@ namespace game
         {
             contype |= CON_TEAMKILL;
             if(actor==player1) 
-            {
-                conoutf(contype, "\f3you fragged a teammate (%s)", dname);
-                if(autosorry)
-                {
-                    defformatstring(autso)("Oops, I'm sorry for this teamkill %s =/", d->name);
-                    conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(player1), autso);
-                    addmsg(N_SAYTEAM, "rcs", player1, autso);
-                }
-            }
+			{
+				conoutf(contype, "\f3you fragged a teammate (%s)", dname);
+				if(autosorry)
+				{
+					defformatstring(autso)("Oops, I'm sorry for this teamkill %s =/", d->name);
+				    conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(player1), autso);
+				    addmsg(N_SAYTEAM, "rcs", player1, autso);
+				}
+			}
             else if(d==player1) 
-            {
-                conoutf(contype, "\f3you got fragged by a teammate (%s)", aname);
-                playerwhokilled = actor->clientnum;
-            }
+			{
+				conoutf(contype, "\f3you got fragged by a teammate (%s)", aname);
+				playerwhokilled = actor->clientnum;
+			}
             else conoutf(contype, "\f2%s fragged a teammate (%s)", aname, dname);
         }
         else
         {
             if(d==player1)
-            {
-                conoutf(contype, "\f2you got fragged by %s", aname);
-                playerniceshot = actor->clientnum;
-            }
-            else if(actor==player1) conoutf(contype, "\f2you fraged %s", dname);
-            else conoutf(contype, "\f2%s fragged %s", aname, dname);
+			{
+				conoutf(contype, "\f2you got fragged by %s", aname);
+				playerniceshot = actor->clientnum;
+			}
+		    else if(actor==player1) conoutf(contype, "\f2you fraged %s", dname);
+			else conoutf(contype, "\f2%s fragged %s", aname, dname);
         }
         deathstate(d);
-        ai::killed(d, actor);
+		ai::killed(d, actor);
     }
+	
+	int getteamscore(const char *team)
+    {
+        vector<teamscore> teamscores;
+        if(cmode) cmode->getteamscores(teamscores);
+        else loopv(players) if(players[i]->team[0])
+        {
+            fpsent *player = players[i];
+            teamscore *ts = NULL;
+            loopvj(teamscores) if(!strcmp(teamscores[j].team, player->team)) { ts = &teamscores[j]; break; }
+            if(!ts) teamscores.add(teamscore(player->team, player->frags));
+            else ts->score += player->frags;
+        }
+        loopv(teamscores)
+        {
+            if(!strcmp(teamscores[i].team, team))
+            {
+                return teamscores[i].score;
+            }
+        }
+        return 0;
+    }
+    
+	ICOMMAND(getteamscore, "s", (const char *team), intret(getteamscore(team)));
 
     void timeupdate(int secs)
     {
@@ -462,12 +489,12 @@ namespace game
             intermission = true;
             player1->attacking = false;
             if(cmode) cmode->gameover();
-            if(goodgame && player1->state!=CS_SPECTATOR && player1->state!=CS_EDITING)
-            {
-                defformatstring(gogatt)("Good game !");
-                conoutf(CON_CHAT, "%s:\f0 %s", colorname(player1), gogatt);
-                addmsg(N_TEXT, "rcs", player1, gogatt);
-            }
+			if(goodgame && player1->state!=CS_SPECTATOR && player1->state!=CS_EDITING)
+			{
+				defformatstring(gogatt)("Good game !");
+				conoutf(CON_CHAT, "%s:\f0 %s", colorname(player1), gogatt);
+				addmsg(N_TEXT, "rcs", player1, gogatt);
+			}
             conoutf(CON_GAMEINFO, "\f2intermission:");
             conoutf(CON_GAMEINFO, "\f2game has ended!");
             if(m_ctf) conoutf(CON_GAMEINFO, "\f2player frags: %d, flags: %d, deaths: %d", player1->frags, player1->flags, player1->deaths);
@@ -489,6 +516,8 @@ namespace game
     ICOMMAND(getaccuracy, "", (), intret((player1->totaldamage*100)/max(player1->totalshots, 1)));
     ICOMMAND(gettotaldamage, "", (), intret(player1->totaldamage));
     ICOMMAND(gettotalshots, "", (), intret(player1->totalshots));
+	ICOMMAND(getsuicides, "", (), intret(player1->suicides));
+	ICOMMAND(getteamkills, "", (), intret(player1->teamkills));
 
     vector<fpsent *> clients;
 
@@ -605,6 +634,7 @@ namespace game
         showscores(false);
         disablezoom();
         lasthit = 0;
+		flagplayer1 = flagplayer2 = -1;
 
         if(identexists("mapstart")) execute("mapstart");
     }
@@ -840,6 +870,7 @@ namespace game
     {
         glPushMatrix();
         glScalef(h/1800.0f, h/1800.0f, 1);
+		int s = 1800/3.5, x = 1800*w/h - s - s/10, y = s/10;
 
         if(player1->state==CS_SPECTATOR)
         {
@@ -860,7 +891,33 @@ namespace game
             if(d->state!=CS_SPECTATOR) drawhudicons(d);
             if(cmode) cmode->drawhud(d, w, h);
         }
-
+		
+		int scorew, scoreh, namew, nameh, resw, resh;
+		int namemaxw = 0;
+		int score1 = getteamscore("good");
+		defformatstring(score)("%d", score1);
+		text_bounds(score, scorew, scoreh);
+		if(m_teammode) draw_textf((strcmp(player1->team, "good") ? "\f3%d" : "\f1%d"), (x+s/2)-(score1>=100 ? 120 : (score1>=10 ? 95 : 70)), cmode ? (y+s/2)/2+415 : 0, score1);
+	    int score2 = getteamscore("evil");
+		if(m_teammode) draw_textf((strcmp(player1->team, "evil") ? "\f3%d" : "\f1%d"), (x+s/2)+40, cmode ? (y+s/2)/2+415 : 0, score2);
+		glPushMatrix();
+		loopv(players) if(players[i]->state!=CS_SPECTATOR)
+		{
+			text_bounds(players[i]->name, namew, nameh);
+			if(namew>namemaxw) namemaxw = namew;
+		}
+		loopv(players) if(players[i]->state!=CS_SPECTATOR)
+		{
+			int wait = max(0, 5-(lastmillis-players[i]->lastpain)/1000);
+			defformatstring(twait)("%d", wait);
+			text_bounds(twait, resw, resh);
+			if(playerslist)
+			{
+				draw_textf((players[i]->state==CS_DEAD ? "\f4%s" : isteam(player1->team, players[i]->team) ? "\f1%s" : "\f3%s"), w*1800/h - namemaxw, cmode ? (y+s/2)/2+415+scoreh+(i*nameh) : scoreh+(i*nameh), players[i]->name);
+				if(players[i]->state==CS_DEAD) draw_textf("%s%d", w*1800/h - (namemaxw+resw), cmode ? (y+s/2)/2+415+scoreh+(i*resh) : scoreh+(i*resh), isteam(player1->team, players[i]->team) ? "\f1" : "\f3", wait);
+			}
+		}
+		glPopMatrix();
         glPopMatrix();
     }
 

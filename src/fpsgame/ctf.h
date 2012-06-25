@@ -2,7 +2,8 @@
 
 #define ctfteamflag(s) (!strcmp(s, "good") ? 1 : (!strcmp(s, "evil") ? 2 : 0))
 #define ctfflagteam(i) (i==1 ? "good" : (i==2 ? "evil" : NULL))
-
+int flagplayer1 = -1;
+int flagplayer2 = -1;
 #ifdef SERVMODE
 struct ctfservmode : servmode
 #else
@@ -751,6 +752,8 @@ struct ctfclientmode : clientmode
         }
         conoutf(CON_GAMEINFO, "%s dropped %s flag", d==player1 ? "you" : colorname(d), m_hold ? "the" : (f.team==ctfteamflag(player1->team) ? "your" : "the enemy"));
         playsound(S_FLAGDROP);
+		if(isteam(player1->team, d->team)) flagplayer1 = -1;
+		if(!isteam(player1->team, d->team)) flagplayer2 = -1;
     }
 
     void flagexplosion(int i, int team, const vec &loc)
@@ -853,6 +856,8 @@ struct ctfclientmode : clientmode
         playsound(S_FLAGSCORE);
 
         if(score >= FLAGLIMIT) conoutf(CON_GAMEINFO, "%s team captured %d flags", team==ctfteamflag(player1->team) ? "your" : "the enemy", score);
+		if(isteam(player1->team, d->team) && !m_protect) flagplayer1 = -1;
+		if(!isteam(player1->team, d->team) && !m_protect) flagplayer2 = -1;
     }
 
     void takeflag(fpsent *d, int i, int version)
@@ -865,6 +870,8 @@ struct ctfclientmode : clientmode
         conoutf(CON_GAMEINFO, "%s %s %s", d==player1 ? "you" : colorname(d), m_hold || m_protect || f.droptime ? "picked up" : "stole", m_hold ? (ctfteamflag(d->team)==ctfteamflag(player1->team) ? "the flag for your team" : "the flag for the enemy team") : (f.team==ctfteamflag(player1->team) ? "your flag" : "the enemy flag"));
         ownflag(i, d, lastmillis);
         playsound(S_FLAGPICKUP);
+		if(isteam(player1->team, d->team)) flagplayer1 = d->clientnum;
+		if(!isteam(player1->team, d->team)) flagplayer2 = d->clientnum;
     }
 
     void invisflag(int i, int invis)

@@ -11,6 +11,8 @@ namespace game
     VARP(showspectators, 0, 1, 1);
     VARP(highlightscore, 0, 1, 1);
     VARP(showconnecting, 0, 0, 1);
+	extern int flagplayer1;
+	extern int flagplayer2;
 	
     static int playersort(const fpsent **a, const fpsent **b)
     {
@@ -245,9 +247,17 @@ b; \
             g.text("cn", fgcolor);
             loopscoregroup(o, g.textf("%d", 0xFFFFDD, NULL, o->clientnum));
             g.poplist();
-						
-            g.space(1);
-            g.pushlist();
+			
+			g.pushlist();
+			g.text("", fgcolor);
+			loopscoregroup(o,
+						   {
+							   const char *icon = sg.team && m_ctf ? (m_hold && (o->clientnum==flagplayer1 || o->clientnum==flagplayer2) ? "blip_neutral_flag.png" : (o->clientnum==flagplayer1 ? (m_protect ? "blip_blue_flag.png" : "blip_red_flag.png") : (o->clientnum==flagplayer2 ? (m_protect ? "blip_red_flag.png" : "blip_blue_flag.png") : "blip_phantom.png"))) : "blip_phantom.png";
+							   g.text("", 0, icon);
+						   });
+			g.poplist();
+			
+			g.pushlist();
             g.text("name", fgcolor);
             g.strut(10);
             loopscoregroup(o, 
@@ -267,42 +277,64 @@ b; \
 			g.text("", fgcolor);
 			loopscoregroup(o,
 						   {
-							   if(o->frags >= player1->frags) g.textf("\f6%d", 0xFFFFDD, NULL, o->frags);
-							   else g.textf("\f1%d", 0xFFFFDD, NULL, o->frags);
+							   if(o->frags >= player1->frags) g.textf("\f9%d", 0xFFFFDD, NULL, o->frags);
+							   else g.textf("\fb%d", 0xFFFFDD, NULL, o->frags);
 						   });
 			g.poplist();
+			
+			if(intermission)
+			{
+				g.space(1);
+				g.pushlist();
+				g.text("", fgcolor);
+				loopscoregroup(o, g.textf("\fp%d", 0XFFFFDD, NULL, o->deaths));
+				g.poplist();
+				
+				g.space(1);
+				g.pushlist();
+				g.text("", fgcolor);
+				loopscoregroup(o,
+							   {
+								   float kpd = o->frags/float(o->deaths ? o->deaths : 1);
+								   g.textf("\fm%3.2f", 0XFFFFDD, NULL, kpd);
+							   });
+				g.poplist();
+			}
 			
 			g.space(1);
 			g.pushlist();
 			g.text("", fgcolor);
-			loopscoregroup(o, g.textf("\f3%d", 0XFFFFDD, NULL, o->deaths));
+			loopscoregroup(o, g.textf("\fy%d%%", 0XFFFFDD, NULL, (o->totaldamage*100)/max(o->totalshots, 1)));
 			g.poplist();
 			
-			g.space(1);
+			g.space(m_ctf ? 1 : 0);
 			g.pushlist();
 			g.text("", fgcolor);
 			loopscoregroup(o,
 						   {
-							   float kpd = o->frags/float(o->deaths ? o->deaths : 1);
-							   g.textf("\f5%3.2f", 0XFFFFDD, NULL, kpd);
-						   });
-			g.poplist();
-			
-			g.space(1);
-			g.pushlist();
-			g.text("", fgcolor);
-			loopscoregroup(o, g.textf("\f2%d%%", 0XFFFFDD, NULL, (o->totaldamage*100)/max(o->totalshots, 1)));
-			g.poplist();
-			
-			g.space(1);
-			g.pushlist();
-			g.text("", fgcolor);
-			loopscoregroup(o,
-						   {
-							   defformatstring(flags)("\f0%d", o->flags);
+							   defformatstring(flags)("\fg%d", o->flags);
 							   g.textf("%s", 0XFFFFDD, NULL, (m_ctf ? flags : ""));
 						   });
 			g.poplist();
+			
+			if(intermission)
+			{
+				g.space(m_teammode ? 1 : 0);
+				g.pushlist();
+				g.text("", fgcolor);
+				loopscoregroup(o, 
+							   {
+								   defformatstring(teamkills)("\f8%d", o->teamkills);
+								   g.textf("%s", 0XFFFFDD, NULL, m_teammode ? teamkills : "");
+							   });
+				g.poplist();
+				
+				g.space(1);
+				g.pushlist();
+				g.text("", fgcolor);
+				loopscoregroup(o, g.textf("\fo%d", 0XFFFFDD, NULL, o->suicides));
+				g.poplist();
+			}				
 			
 			if(sg.team && m_teammode)
             {
