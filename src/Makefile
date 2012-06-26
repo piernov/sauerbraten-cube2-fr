@@ -16,6 +16,7 @@ endif
 MV=mv
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
+override CXXFLAGS+= -O2
 WINDRES= windres
 CLIENT_INCLUDES= $(INCLUDES) -Iinclude
 CLIENT_LIBS= -mwindows -Llib -lSDL -lSDL_image -lSDL_mixer -lzdll -lopengl32 -lenet -lws2_32 -lwinmm
