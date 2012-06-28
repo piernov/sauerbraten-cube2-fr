@@ -419,7 +419,10 @@ namespace game
         if(actor->type==ENT_AI)
             conoutf(contype, "\f2%s got killed by %s!", dname, aname);
         else if(d==actor || actor->type==ENT_INANIMATE)
+        {
+            d->suicides++;
             conoutf(contype, "\f2%s suicided%s", dname, d==player1 ? "!" : "");
+        }
         else if(isteam(d->team, actor->team))
         {
             contype |= CON_TEAMKILL;
@@ -439,6 +442,7 @@ namespace game
 				playerwhokilled = actor->clientnum;
 			}
             else conoutf(contype, "\f2%s fragged a teammate (%s)", aname, dname);
+            actor->teamkills++;
         }
         else
         {
@@ -497,8 +501,9 @@ namespace game
 			}
             conoutf(CON_GAMEINFO, "\f2intermission:");
             conoutf(CON_GAMEINFO, "\f2game has ended!");
-            if(m_ctf) conoutf(CON_GAMEINFO, "\f2player frags: %d, flags: %d, deaths: %d", player1->frags, player1->flags, player1->deaths);
-            else conoutf(CON_GAMEINFO, "\f2player frags: %d, deaths: %d", player1->frags, player1->deaths);
+            if(m_ctf) conoutf(CON_GAMEINFO, "\f2player frags: %d, flags: %d, deaths: %d, suicides: %d", player1->frags, player1->flags, player1->deaths, player1->suicides);
+            if(m_teammode) conoutf(CON_GAMEINFO, "\f2player frags: %d, deaths: %d, suicides: %d, teamkills: %d", player1->frags, player1->deaths, player1->suicides, player1->teamkills);
+            else conoutf(CON_GAMEINFO, "\f2player frags: %d, deaths: %d, suicides: %d", player1->frags, player1->deaths, player1->suicides);
             int accuracy = (player1->totaldamage*100)/max(player1->totalshots, 1);
             conoutf(CON_GAMEINFO, "\f2player total damage dealt: %d, damage wasted: %d, accuracy(%%): %d", player1->totaldamage, player1->totalshots-player1->totaldamage, accuracy);
             if(m_sp) spsummary(accuracy);
@@ -598,6 +603,8 @@ namespace game
             d->deaths = 0;
             d->totaldamage = 0;
             d->totalshots = 0;
+            d->suicides = 0;
+            d->teamkills = 0;
             d->maxhealth = 100;
             d->lifesequence = -1;
             d->respawned = d->suicided = -2;
