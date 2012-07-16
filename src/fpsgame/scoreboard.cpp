@@ -6,6 +6,12 @@ namespace game
     VARP(scoreboard2d, 0, 1, 1);
     VARP(showservinfo, 0, 1, 1);
     VARP(showclientnum, 0, 0, 1);
+	VARP(showdeaths, 0, 0, 1);
+	VARP(showkpd, 0, 0, 1);
+	VARP(showaccuracy, 0, 0, 1);
+	VARP(showflags, 0, 0, 1);
+	VARP(showteamkills, 0, 0, 1);
+	VARP(showsuicides, 0, 0, 1);
     VARP(showpj, 0, 0, 1);
     VARP(showping, 0, 1, 1);
     VARP(showspectators, 0, 1, 1);
@@ -282,14 +288,17 @@ b; \
 						   });
 			g.poplist();
 			
-			if(intermission)
+			if(intermission || showdeaths)
 			{
 				g.space(1);
 				g.pushlist();
 				g.text("", fgcolor);
 				loopscoregroup(o, g.textf("\fp%d", 0XFFFFDD, NULL, o->deaths));
 				g.poplist();
-				
+			}
+			
+			if(intermission || showkpd)
+			{
 				g.space(1);
 				g.pushlist();
 				g.text("", fgcolor);
@@ -301,23 +310,29 @@ b; \
 				g.poplist();
 			}
 			
-			g.space(1);
-			g.pushlist();
-			g.text("", fgcolor);
-			loopscoregroup(o, g.textf("\fy%d%%", 0XFFFFDD, NULL, (o->totaldamage*100)/max(o->totalshots, 1)));
-			g.poplist();
+			if(showaccuracy)
+			{
+				g.space(1);
+			    g.pushlist();
+			    g.text("", fgcolor);
+			    loopscoregroup(o, g.textf("\fy%d%%", 0XFFFFDD, NULL, (o->totaldamage*100)/max(o->totalshots, 1)));
+			    g.poplist();
+			}
 			
-			g.space(m_ctf ? 1 : 0);
-			g.pushlist();
-			g.text("", fgcolor);
-			loopscoregroup(o,
-						   {
-							   defformatstring(flags)("\fg%d", o->flags);
-							   g.textf("%s", 0XFFFFDD, NULL, (m_ctf ? flags : ""));
-						   });
-			g.poplist();
+			if(showflags)
+			{
+				g.space(m_ctf ? 1 : 0);
+			    g.pushlist();
+			    g.text("", fgcolor);
+			    loopscoregroup(o,
+						       {
+							       defformatstring(flags)("\fg%d", o->flags);
+							       g.textf("%s", 0XFFFFDD, NULL, (m_ctf ? flags : ""));
+						       });
+			    g.poplist();
+			}
 			
-			if(intermission)
+			if(intermission || showteamkills)
 			{
 				g.space(m_teammode ? 1 : 0);
 				g.pushlist();
@@ -328,7 +343,10 @@ b; \
 								   g.textf("%s", 0XFFFFDD, NULL, m_teammode ? teamkills : "");
 							   });
 				g.poplist();
-				
+			}
+			
+			if(intermission || showsuicides)
+			{
 				g.space(1);
 				g.pushlist();
 				g.text("", fgcolor);
@@ -453,4 +471,3 @@ b; \
     }
     ICOMMAND(showscores, "D", (int *down), showscores(*down!=0));
 }
-

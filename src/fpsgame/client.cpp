@@ -1035,10 +1035,10 @@ namespace game
                 filtertext(text, text);
                 if(d->state!=CS_DEAD && d->state!=CS_SPECTATOR)
                     particle_textcopy(d->abovehead(), text, PART_TEXT, 2000, 0x32FF64, 4.0f, -8);
-                conoutf(CON_CHAT, "%s:\f0 %s", colorname(d), text);
+				conoutf(CON_CHAT, (isteam(player1->team, d->team) ? d->state==CS_DEAD ? "\f1%s:\f4 %s" : d->state==CS_SPECTATOR ? "\f1%s:\f7 %s" : "\f1%s:\f0 %s" : d->state==CS_DEAD ? "\f3%s:\f4 %s" : d->state==CS_SPECTATOR ? "\f3%s:\f7 %s" : "\f3%s:\f0 %s"), colorname(d), text);
                 break;
             }
-
+				
             case N_SAYTEAM:
             {
                 int tcn = getint(p);
@@ -1048,7 +1048,7 @@ namespace game
                 if(!t) break;
                 if(t->state!=CS_DEAD && t->state!=CS_SPECTATOR)
                     particle_textcopy(t->abovehead(), text, PART_TEXT, 2000, 0x6496FF, 4.0f, -8);
-                conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(t), text);
+                conoutf(CON_TEAMCHAT, "%s: %s", colorname(t), text);
                 break;
             }
 

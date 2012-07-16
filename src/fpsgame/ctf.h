@@ -4,6 +4,7 @@
 #define ctfflagteam(i) (i==1 ? "good" : (i==2 ? "evil" : NULL))
 int flagplayer1 = -1;
 int flagplayer2 = -1;
+int flagdrop = 0;
 #ifdef SERVMODE
 struct ctfservmode : servmode
 #else
@@ -503,7 +504,7 @@ struct ctfclientmode : clientmode
         }
 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        int s = 1800/4, x = 1800*w/h - s - s/10, y = s/10;
+        int s = 1800/3.5, x = 1800*w/h - s - s/10, y = s/10;
         glColor4f(1, 1, 1, minimapalpha);
         if(minimapalpha >= 1) glDisable(GL_BLEND);
         bindminimap();
@@ -550,6 +551,26 @@ struct ctfclientmode : clientmode
                 glPopMatrix();
             }
         }
+		glPushMatrix();
+		const char* team1 = "good";
+		const char* team2 = "evil";
+		loopv(flags)
+		{
+			if(flags[i].droptime)
+			{
+				int flagdroptime = max(10 - (lastmillis - flags[i].interptime)/1000, 0);
+				if(m_hold) draw_textf(flagdrop ? "%d" : "", (x+s/2)-(flagdroptime>=10 ? 28 : 16), (y+s/2)/2+415, flagdroptime);
+				else if (flags[i].team==ctfteamflag(player1->team)) draw_textf("\f1%d", (flags[i].team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
+				else draw_textf("\f3%d", (flags[i].team==ctfteamflag("good")) ? (x+s/2)-(flagdroptime>=10 ? 180 : 155) : (x+s/2)+125, (y+s/2)/2+400, flagdroptime);
+			}
+			if(flags[i].owner)
+			{
+				fpsent *d = flags[i].owner;
+				int flaghowntime = max(HOLDSECS - (lastmillis - flags[i].owntime)/1000, 0);
+				if(m_hold) draw_textf((isteam(player1->team,d->team) ? "\f1%d" : "\f3%d"), (strcmp(d->team, team2) ? (x+s/2)-(flaghowntime>=10 ? 180 : 155) : (x+s/2)+125), (y+s/2)/2+400, flaghowntime);
+			}
+		}
+		glPopMatrix();
     }
 
     void removeplayer(fpsent *d)
@@ -752,6 +773,7 @@ struct ctfclientmode : clientmode
         }
         conoutf(CON_GAMEINFO, "%s dropped %s flag", d==player1 ? "you" : colorname(d), m_hold ? "the" : (f.team==ctfteamflag(player1->team) ? "your" : "the enemy"));
         playsound(S_FLAGDROP);
+		flagdrop = 1;
 		if(isteam(player1->team, d->team)) flagplayer1 = -1;
 		if(!isteam(player1->team, d->team)) flagplayer2 = -1;
     }
@@ -797,6 +819,7 @@ struct ctfclientmode : clientmode
         if(m_protect && d->feetpos().dist(f.spawnloc) < FLAGRADIUS) d->flagpickup |= 1<<f.id;
         conoutf(CON_GAMEINFO, "%s returned %s flag", d==player1 ? "you" : colorname(d), m_hold ? "the" : (f.team==ctfteamflag(player1->team) ? "your" : "the enemy"));
         playsound(S_FLAGRETURN);
+		flagdrop = 0;
     }
 
     void spawnflag(flag &f)
@@ -824,6 +847,7 @@ struct ctfclientmode : clientmode
             conoutf(CON_GAMEINFO, "%s flag reset", m_hold ? "the" : (f.team==ctfteamflag(player1->team) ? "your" : "the enemy"));
             playsound(S_FLAGRESET);
         }
+		flagdrop = 0;
     }
 
     void scoreflag(fpsent *d, int relay, int relayversion, int goal, int goalversion, int goalspawn, int team, int score, int dflags)
@@ -856,6 +880,7 @@ struct ctfclientmode : clientmode
         playsound(S_FLAGSCORE);
 
         if(score >= FLAGLIMIT) conoutf(CON_GAMEINFO, "%s team captured %d flags", team==ctfteamflag(player1->team) ? "your" : "the enemy", score);
+		flagdrop = 0;
 		if(isteam(player1->team, d->team) && !m_protect) flagplayer1 = -1;
 		if(!isteam(player1->team, d->team) && !m_protect) flagplayer2 = -1;
     }
@@ -870,6 +895,7 @@ struct ctfclientmode : clientmode
         conoutf(CON_GAMEINFO, "%s %s %s", d==player1 ? "you" : colorname(d), m_hold || m_protect || f.droptime ? "picked up" : "stole", m_hold ? (ctfteamflag(d->team)==ctfteamflag(player1->team) ? "the flag for your team" : "the flag for the enemy team") : (f.team==ctfteamflag(player1->team) ? "your flag" : "the enemy flag"));
         ownflag(i, d, lastmillis);
         playsound(S_FLAGPICKUP);
+		flagdrop = 0;
 		if(isteam(player1->team, d->team)) flagplayer1 = d->clientnum;
 		if(!isteam(player1->team, d->team)) flagplayer2 = d->clientnum;
     }
