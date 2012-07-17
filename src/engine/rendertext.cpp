@@ -162,6 +162,7 @@ static void text_color(char c, char *stack, int size, int &sp, bvec color, int a
 			case '9': color = bvec( 50, 255, 255); break;   // cyan
 			case 'b': color = bvec(  0, 110, 255); break;   // new blue
 			case 'g': color = bvec(  0, 255,   0); break;   // new green
+			case 'h': color = bvec(  0, 153,   0); break;   // dark green
 			case 'm': color = bvec(200,   0, 255); break;   // new magenta
             case 'o': color = bvec(255, 148,   0); break;   // new orange
 			case 'p': color = bvec(255,   0,   0); break;   // new red

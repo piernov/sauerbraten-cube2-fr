@@ -323,7 +323,7 @@
 										<key>_historyCapacity</key>
 										<integer>0</integer>
 										<key>bookmark</key>
-										<string>5597952E15B4986D001FC14C</string>
+										<string>557598F115B5DE8000A8D091</string>
 										<key>history</key>
 										<array>
 											<string>555FFC27157F4F000063631D</string>
@@ -338,11 +338,11 @@
 											<string>559F6D1615A796B9008CEF74</string>
 											<string>559F6D1715A796B9008CEF74</string>
 											<string>559F6D1815A796B9008CEF74</string>
-											<string>5551139715AAF6A7004F38B3</string>
 											<string>555F4AC515AEE8690083DFC9</string>
 											<string>5597952815B4986D001FC14C</string>
-											<string>5597952915B4986D001FC14C</string>
-											<string>55B30B4415B0505B0054A11C</string>
+											<string>55B05BDA15B58E6100E66F47</string>
+											<string>55B05BDB15B58E6100E66F47</string>
+											<string>557598E615B5DE7900A8D091</string>
 										</array>
 									</dict>
 									<key>SplitCount</key>
@@ -354,14 +354,14 @@
 							<key>GeometryConfiguration</key>
 							<dict>
 								<key>Frame</key>
-								<string>{{0, 0}, {952, 485}}</string>
+								<string>{{0, 0}, {952, 453}}</string>
 								<key>RubberWindowFrame</key>
 								<string>40 55 1160 723 0 0 1280 778 </string>
 							</dict>
 							<key>Module</key>
 							<string>PBXNavigatorGroup</string>
 							<key>Proportion</key>
-							<string>485pt</string>
+							<string>453pt</string>
 						</dict>
 						<dict>
 							<key>ContentConfiguration</key>
@@ -374,14 +374,14 @@
 							<key>GeometryConfiguration</key>
 							<dict>
 								<key>Frame</key>
-								<string>{{0, 490}, {952, 192}}</string>
+								<string>{{0, 458}, {952, 224}}</string>
 								<key>RubberWindowFrame</key>
 								<string>40 55 1160 723 0 0 1280 778 </string>
 							</dict>
 							<key>Module</key>
 							<string>XCDetailModule</string>
 							<key>Proportion</key>
-							<string>192pt</string>
+							<string>224pt</string>
 						</dict>
 					</array>
 					<key>Proportion</key>
@@ -400,9 +400,9 @@
 			</array>
 			<key>TableOfContents</key>
 			<array>
-				<string>5597952B15B4986D001FC14C</string>
+				<string>557598F215B5DE8000A8D091</string>
 				<string>1CE0B1FE06471DED0097A5F4</string>
-				<string>5597952C15B4986D001FC14C</string>
+				<string>557598F315B5DE8000A8D091</string>
 				<string>1CE0B20306471E060097A5F4</string>
 				<string>1CE0B20506471E060097A5F4</string>
 			</array>
@@ -541,6 +541,7 @@
 	<key>WindowOrderList</key>
 	<array>
 		<string>552B3E4E154036E000B9E0C9</string>
+		<string>55B05BDD15B58E6100E66F47</string>
 		<string>/Users/Eliott/Desktop/Zauer/sourcecode/xcode/sauerbraten.xcodeproj</string>
 	</array>
 	<key>WindowString</key>
@@ -621,7 +622,7 @@
 			<key>TableOfContents</key>
 			<array>
 				<string>552B3E4E154036E000B9E0C9</string>
-				<string>5597952D15B4986D001FC14C</string>
+				<string>557598F415B5DE8000A8D091</string>
 				<string>1CD0528F0623707200166675</string>
 				<string>XCMainBuildResultsModuleGUID</string>
 			</array>
