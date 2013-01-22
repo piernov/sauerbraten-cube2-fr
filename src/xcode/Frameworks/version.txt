@@ -1,7 +1,0 @@
-These are the latest versions of SDL as at time of release:
-	SDL-1.2.14.dmg
-	SDL_mixer-1.2.11.dmg
-	SDL_image-1.2.10.dmg
-
-The versions of SDL within svn are much older and do not support 64bit building.
-If building from svn then in xcode click on the project root and select "architectures:standard 32-bit universal".

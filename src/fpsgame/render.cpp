@@ -10,7 +10,7 @@ namespace game
     VARP(ragdollfade, 0, 1000, 300000);
     VARFP(playermodel, 0, 0, 4, changedplayermodel());
     VARP(forceplayermodels, 0, 0, 1);
-    VARP(allplayermodels, 0, 0, 1);
+    VARP(hidedead, 0, 0, 1);
 
     vector<fpsent *> ragdolls;
 
@@ -48,20 +48,17 @@ namespace game
 
     static const playermodelinfo playermodels[5] =
     {
-        { "mrfixit", "mrfixit/blue", "mrfixit/red", "mrfixit/hudguns", NULL, "mrfixit/horns", { "mrfixit/armor/blue", "mrfixit/armor/green", "mrfixit/armor/yellow" }, "mrfixit", "mrfixit_blue", "mrfixit_red", true, true},
-        { "snoutx10k", "snoutx10k/blue", "snoutx10k/red", "snoutx10k/hudguns", NULL, "snoutx10k/wings", { "snoutx10k/armor/blue", "snoutx10k/armor/green", "snoutx10k/armor/yellow" }, "snoutx10k", "snoutx10k_blue", "snoutx10k_red", true, true },
-        { "ogro/green", "ogro/blue", "ogro/red", "mrfixit/hudguns", "ogro/vwep", NULL, { NULL, NULL, NULL }, "ogro", "ogro_blue", "ogro_red", false, false },
-        { "inky", "inky/blue", "inky/red", "inky/hudguns", NULL, "inky/quad", { "inky/armor/blue", "inky/armor/green", "inky/armor/yellow" }, "inky", "inky_blue", "inky_red", true, true },
-        { "captaincannon", "captaincannon/blue", "captaincannon/red", "captaincannon/hudguns", NULL, "captaincannon/quad", { "captaincannon/armor/blue", "captaincannon/armor/green", "captaincannon/armor/yellow" }, "captaincannon", "captaincannon_blue", "captaincannon_red", true, true }
+        { "mrfixit", "mrfixit/blue", "mrfixit/red", "mrfixit/hudguns", NULL, "mrfixit/horns", { "mrfixit/armor/blue", "mrfixit/armor/green", "mrfixit/armor/yellow" }, "mrfixit", "mrfixit_blue", "mrfixit_red", true },
+        { "snoutx10k", "snoutx10k/blue", "snoutx10k/red", "snoutx10k/hudguns", NULL, "snoutx10k/wings", { "snoutx10k/armor/blue", "snoutx10k/armor/green", "snoutx10k/armor/yellow" }, "snoutx10k", "snoutx10k_blue", "snoutx10k_red", true },
+        //{ "ogro/green", "ogro/blue", "ogro/red", "mrfixit/hudguns", "ogro/vwep", NULL, { NULL, NULL, NULL }, "ogro", "ogro_blue", "ogro_red", false },
+        { "ogro2", "ogro2/blue", "ogro2/red", "mrfixit/hudguns", NULL, "ogro2/quad", { "ogro2/armor/blue", "ogro2/armor/green", "ogro2/armor/yellow" }, "ogro", "ogro_blue", "ogro_red", true },
+        { "inky", "inky/blue", "inky/red", "inky/hudguns", NULL, "inky/quad", { "inky/armor/blue", "inky/armor/green", "inky/armor/yellow" }, "inky", "inky_blue", "inky_red", true },
+        { "captaincannon", "captaincannon/blue", "captaincannon/red", "captaincannon/hudguns", NULL, "captaincannon/quad", { "captaincannon/armor/blue", "captaincannon/armor/green", "captaincannon/armor/yellow" }, "captaincannon", "captaincannon_blue", "captaincannon_red", true }
     };
 
     int chooserandomplayermodel(int seed)
     {
-        static int choices[sizeof(playermodels)/sizeof(playermodels[0])];
-        int numchoices = 0;
-        loopi(sizeof(playermodels)/sizeof(playermodels[0])) if(i == playermodel || playermodels[i].selectable || allplayermodels) choices[numchoices++] = i;
-        if(numchoices <= 0) return -1;
-        return choices[(seed&0xFFFF)%numchoices];
+        return (seed&0xFFFF)%(sizeof(playermodels)/sizeof(playermodels[0]));
     }
 
     const playermodelinfo *getplayermodelinfo(int n)
@@ -73,7 +70,7 @@ namespace game
     const playermodelinfo &getplayermodelinfo(fpsent *d)
     {
         const playermodelinfo *mdl = getplayermodelinfo(d==player1 || forceplayermodels ? playermodel : d->playermodel);
-        if(!mdl || (!mdl->selectable && !allplayermodels)) mdl = getplayermodelinfo(playermodel);
+        if(!mdl) mdl = getplayermodelinfo(playermodel);
         return *mdl;
     }
 
@@ -88,7 +85,7 @@ namespace game
             if(!forceplayermodels)
             {
                 const playermodelinfo *mdl = getplayermodelinfo(d->playermodel);
-                if(mdl && (mdl->selectable || allplayermodels)) continue;
+                if(mdl) continue;
             }
             cleanragdoll(d);
         }
@@ -99,7 +96,7 @@ namespace game
             if(!forceplayermodels)
             {
                 const playermodelinfo *mdl = getplayermodelinfo(d->playermodel);
-                if(mdl && (mdl->selectable || allplayermodels)) continue;
+                if(mdl) continue;
             }
             cleanragdoll(d);
         }
@@ -111,7 +108,7 @@ namespace game
         {
             const playermodelinfo *mdl = getplayermodelinfo(i);
             if(!mdl) break;
-            if(i != playermodel && (!multiplayer(false) || forceplayermodels || (!mdl->selectable && !allplayermodels))) continue;
+            if(i != playermodel && (!multiplayer(false) || forceplayermodels)) continue;
             if(m_teammode)
             {
                 preloadmodel(mdl->blueteam);
@@ -136,8 +133,7 @@ namespace game
             lastaction = 0;
             hold = attack = ANIM_LOSE|ANIM_LOOP;
             delay = 0;
-            if(m_teammode) loopv(bestteams) { if(!strcmp(bestteams[i], d->team)) { hold = attack = ANIM_WIN|ANIM_LOOP; break; } }
-            else if(bestplayers.find(d)>=0) hold = attack = ANIM_WIN|ANIM_LOOP;
+            if(m_teammode ? bestteams.htfind(d->team)>=0 : bestplayers.find(d)>=0) hold = attack = ANIM_WIN|ANIM_LOOP;
         }
         else if(d->state==CS_ALIVE && d->lasttaunt && lastmillis-d->lasttaunt<1000 && lastmillis-d->lastaction>delay)
         {
@@ -210,7 +206,7 @@ namespace game
         loopv(players)
         {
             fpsent *d = players[i];
-            if(d == player1 || d->state==CS_SPECTATOR || d->state==CS_SPAWNING || d->lifesequence < 0 || d == exclude) continue;
+            if(d == player1 || d->state==CS_SPECTATOR || d->state==CS_SPAWNING || d->lifesequence < 0 || d == exclude || (d->state==CS_DEAD && hidedead)) continue;
             int team = 0;
             if(teamskins || m_teammode) team = isteam(player1->team, d->team) ? 1 : 2;
             renderplayer(d, getplayermodelinfo(d), team, 1, mainpass);
@@ -228,7 +224,7 @@ namespace game
                 fade -= clamp(float(lastmillis - (d->lastupdate + max(ragdollmillis - ragdollfade, 0)))/min(ragdollmillis, ragdollfade), 0.0f, 1.0f);
             renderplayer(d, getplayermodelinfo(d), team, fade, mainpass);
         } 
-        if(isthirdperson() && !followingplayer()) renderplayer(player1, getplayermodelinfo(player1), teamskins || m_teammode ? 1 : 0, 1, mainpass);
+        if(isthirdperson() && !followingplayer() && (player1->state!=CS_DEAD || !hidedead)) renderplayer(player1, getplayermodelinfo(player1), teamskins || m_teammode ? 1 : 0, 1, mainpass);
         rendermonsters();
         rendermovables();
         entities::renderentities();
@@ -247,7 +243,7 @@ namespace game
 
     FVAR(swaystep, 1, 35.0f, 100);
     FVAR(swayside, 0, 0.04f, 1);
-    FVAR(swayup, 0, 0.05f, 1);
+    FVAR(swayup, -1, 0.05f, 1);
 
     float swayfade = 0, swayspeed = 0, swaydist = 0;
     vec swaydir(0, 0, 0);
@@ -321,7 +317,7 @@ namespace game
             base = 0;
             interp = &guninterp;
         }
-        rendermodel(NULL, gunname, anim, sway, testhudgun ? 0 : d->yaw+90, testhudgun ? 0 : d->pitch, MDL_LIGHT, interp, a, base, (int)ceil(speed));
+        rendermodel(NULL, gunname, anim, sway, testhudgun ? 0 : d->yaw+90, testhudgun ? 0 : d->pitch, MDL_LIGHT|MDL_HUD, interp, a, base, (int)ceil(speed));
         if(d->muzzle.x >= 0) d->muzzle = calcavatarpos(d->muzzle, 12);
     }
 
@@ -348,6 +344,25 @@ namespace game
     void renderavatar()
     {
         drawhudgun();
+    }
+
+    void renderplayerpreview(int model, int team, int weap)
+    {
+        static fpsent *previewent = NULL;
+        if(!previewent)
+        {
+            previewent = new fpsent;
+            previewent->o = vec(0, 0.9f*(previewent->eyeheight + previewent->aboveeye), previewent->eyeheight - (previewent->eyeheight + previewent->aboveeye)/2);
+            previewent->light.color = vec(1, 1, 1);
+            previewent->light.dir = vec(0, -1, 2).normalize();
+            loopi(GUN_PISTOL-GUN_FIST) previewent->ammo[GUN_FIST+1+i] = 1;
+        }
+        previewent->gunselect = clamp(weap, int(GUN_FIST), int(GUN_PISTOL));
+        previewent->yaw = fmod(lastmillis/10000.0f*360.0f, 360.0f);
+        previewent->light.millis = -1;
+        const playermodelinfo *mdlinfo = getplayermodelinfo(model);
+        if(!mdlinfo) return;
+        renderplayer(previewent, *mdlinfo, team >= 0 && team <= 2 ? team : 0, 1, false);
     }
 
     vec hudgunorigin(int gun, const vec &from, const vec &to, fpsent *d)
@@ -401,11 +416,20 @@ namespace game
         }
     }
 
+    void preloadsounds()
+    {
+        for(int i = S_JUMP; i <= S_SPLASH2; i++) preloadsound(i);
+        for(int i = S_JUMPPAD; i <= S_PISTOL; i++) preloadsound(i);
+        for(int i = S_V_BOOST; i <= S_V_QUAD10; i++) preloadsound(i);
+        for(int i = S_BURN; i <= S_HIT; i++) preloadsound(i);
+    }
+
     void preload()
     {
         if(hudgun) preloadweapons();
         preloadbouncers();
         preloadplayermodel();
+        preloadsounds();
         entities::preloadentities();
         if(m_sp) preloadmonsters();
     }

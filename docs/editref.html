@@ -106,6 +106,12 @@
 <li>
 <a href="#gotosel"><tt>gotosel</tt></a>
 </li>
+<li>
+<a href="#savebrush"><tt>savebrush</tt></a>
+</li>
+<li>
+<a href="#pastebrush"><tt>pastebrush</tt></a>
+</li>
 </ul>
 </li>
 <li>
@@ -501,6 +507,18 @@
 </li>
 <li>
 <a href="#edgetolerance"><tt>edgetolerance</tt></a>
+</li>
+<li>
+<a href="#sunlight"><tt>sunlight</tt></a>
+</li>
+<li>
+<a href="#sunlightyaw"><tt>sunlightyaw</tt></a>
+</li>
+<li>
+<a href="#sunlightpitch"><tt>sunlightpitch</tt></a>
+</li>
+<li>
+<a href="#sunlightscale"><tt>sunlightscale</tt></a>
 </li>
 <li>
 <a href="#skylight"><tt>skylight</tt></a>
@@ -932,7 +950,7 @@ replaced.
 
 <pre id="editmat">editmat MAT [FILTER]</pre>
 <p>
-Changes the type of material left behind when a cube is deleted to MAT. If FILTER is specified, then only cubes with that material named by FILTER are changed to MAT. MAT may also be "", indicating that only those parts of the material mask matching FILTER will be cleared, as opposed to setting MAT to "air", which would clear the entire material mask.
+Changes the type of material left behind when a cube is deleted to MAT. If FILTER is specified, then only cubes with that material named by FILTER are changed to MAT. MAT may also be "", indicating that only those parts of the material mask matching FILTER will be cleared, as opposed to setting MAT to "air", which would clear the entire material mask. FILTER may alternatively be one of "empty", "notempty", "solid", and "notsolid" which will then only affect cubes containing such geometry.
 </p>
 
 <p>
@@ -991,6 +1009,16 @@ Returns 0 if the cubes are only implicitly selected.
 <pre id="gotosel">gotosel</pre>
 <p>
 Goes to the position of the currently selected cube or entity.
+</p>
+
+<pre id="savebrush">savebrush B</pre>
+<p>
+Saves the current selection as an octa-brush named B.
+</p>
+
+<pre id="pastebrush">pastebrush B</pre>
+<p>
+Pastes the octa-brush named B.
 </p>
 
 <h2 id="heightfield">Heightfield</h2>
@@ -1212,7 +1240,7 @@ Changes property P (0..3) of the selected entities by amount A. For example
 2.
 </p>
 
-<pre id="entfind">entfind type type value1 value2 value3 value4</pre>
+<pre id="entfind">entfind type value1 value2 value3 value4</pre>
 <p>
 Select all entities matching given values. '*' and blanks are wildcard.
 All ents that match the pattern will be ADDED to the selection.
@@ -2079,6 +2107,26 @@ This controls how far an intersection with some geometry has to be from the surf
 <p>
 When lighting a map, each lightmap pixel is the result of many samples from a grid-pattern, as a result the sampling pattern may go over the edge of one triangle but behind another. Increasing this variable helps alleviate this, especially in terrain heavy maps.
  </p>
+
+<pre id="sunlight">sunlight R [G B]</pre>
+<p>
+This sets the color of a simple directional sunlight. R G B are values in the range 0..255 (default: 0). If only R, is specified it is interpreted as a grayscale light value. Use "sunlight 0" to disable.
+</p>
+
+<pre id="sunlightyaw">sunlightyaw YAW</pre>
+<p>
+This sets the yaw of the directional sunlight to YAW.
+</p>
+
+<pre id="sunlightpitch">sunlightpitch PITCH</pre>
+<p>
+This sets the pitch of the directional sunlight to PITCH.
+</p>
+
+<pre id="sunlightscale">sunlightscale F</pre>
+<p>
+This sets the color scale of the direction sunlight to the floating-point value F (default: 1.0).
+</p>
 
 <pre id="skylight">skylight R [G B]</pre>
 <p>

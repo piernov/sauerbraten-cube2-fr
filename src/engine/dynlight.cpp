@@ -6,7 +6,7 @@ VARP(dynlightdist, 0, 1024, 10000);
 
 struct dynlight
 {
-    vec o;
+    vec o, hud;
     float radius, initradius, curradius, dist;
     vec color, initcolor, curcolor;
     int fade, peak, expire, flags;
@@ -14,7 +14,7 @@ struct dynlight
 
     void calcradius()
     {
-        if(fade + peak)
+        if(fade + peak > 0)
         {
             int remaining = expire - lastmillis;
             if(flags&DL_EXPAND)
@@ -30,7 +30,7 @@ struct dynlight
 
     void calccolor()
     {
-        if(flags&DL_FLASH || !peak) curcolor = color;
+        if(flags&DL_FLASH || peak <= 0) curcolor = color;
         else
         {
             int peaking = expire - lastmillis - fade;
@@ -39,7 +39,7 @@ struct dynlight
         }
 
         float intensity = 1.0f;
-        if(fade)
+        if(fade > 0)
         {
             int fading = expire - lastmillis;
             if(fading < fade) intensity = float(fading)/fade;
@@ -56,12 +56,12 @@ vector<dynlight *> closedynlights;
 void adddynlight(const vec &o, float radius, const vec &color, int fade, int peak, int flags, float initradius, const vec &initcolor, physent *owner)
 {
     if(renderpath==R_FIXEDFUNCTION ? !ffdynlights || maxtmus<3 : !maxdynlights) return;
-    if(o.dist(camera1->o) > dynlightdist) return;
+    if(o.dist(camera1->o) > dynlightdist || radius <= 0) return;
 
     int insert = 0, expire = fade + peak + lastmillis;
     loopvrev(dynlights) if(expire>=dynlights[i].expire) { insert = i+1; break; }
     dynlight d;
-    d.o = o;
+    d.o = d.hud = o;
     d.radius = radius;
     d.initradius = initradius;
     d.color = color;
@@ -95,7 +95,7 @@ void updatedynlights()
     loopv(dynlights)
     {
         dynlight &d = dynlights[i];
-        if(d.owner) game::dynlighttrack(d.owner, d.o);
+        if(d.owner) game::dynlighttrack(d.owner, d.o, d.hud);
         d.calcradius();
         d.calccolor();
     }
@@ -144,7 +144,7 @@ bool getdynlight(int n, vec &o, float &radius, vec &color)
     return true;
 }
 
-void dynlightreaching(const vec &target, vec &color, vec &dir)
+void dynlightreaching(const vec &target, vec &color, vec &dir, bool hud)
 {
     vec dyncolor(0, 0, 0);//, dyndir(0, 0, 0);
     loopv(dynlights)
@@ -152,13 +152,13 @@ void dynlightreaching(const vec &target, vec &color, vec &dir)
         dynlight &d = dynlights[i];
         if(d.curradius<=0) continue;
 
-        vec ray(d.o);
+        vec ray(hud ? d.hud : d.o);
         ray.sub(target);
-        float mag = ray.magnitude();
-        if(mag >= d.curradius) continue;
+        float mag = ray.squaredlen();
+        if(mag >= d.curradius*d.curradius) continue;
 
         vec color = d.curcolor;
-        color.mul(1 - mag/d.curradius);
+        color.mul(1 - sqrtf(mag)/d.curradius);
         dyncolor.add(color);
         //dyndir.add(ray.mul(intensity/mag));
     }

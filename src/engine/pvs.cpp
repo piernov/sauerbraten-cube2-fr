@@ -76,7 +76,7 @@ static void genpvsnodes(cube *c, int parent = 0, const ivec &co = ivec(0, 0, 0),
         pvsnode &n = origpvsnodes.add();
         n.flags = 0;
         n.children = 0;
-        if(c[i].children || isempty(c[i]) || (c[i].ext && c[i].ext->material&MAT_ALPHA)) memset(n.edges.v, 0xFF, 3);
+        if(c[i].children || isempty(c[i]) || c[i].material&MAT_ALPHA) memset(n.edges.v, 0xFF, 3);
         else loopk(3)
         {
             uint face = c[i].faces[k];
@@ -122,6 +122,8 @@ struct usvec
 
     ushort &operator[](int i) { return v[i]; }
     ushort operator[](int i) const { return v[i]; }
+
+    ivec toivec() const { return ivec(x, y, z); }
 };
 
 struct shaftbb
@@ -421,25 +423,64 @@ struct pvsworker
 
     ringbuf<shaftbb, 32> prevblockers;
 
+    struct cullorder
+    {
+        int index, dist;
+
+        cullorder() {}
+        cullorder(int index, int dist) : index(index), dist(dist) {}
+    };
+
     void cullpvs(pvsnode &p, const ivec &co = ivec(0, 0, 0), int size = worldsize)
     {
         if(p.flags&(PVS_HIDE_BB | PVS_HIDE_GEOM) || genpvs_canceled) return;
         if(p.children && !(p.flags&PVS_HIDE_BB))
         {
             pvsnode *children = &pvsnodes[p.children];
+            int csize = size>>1;
+            ivec dmin = ivec(co).add(csize>>1).sub(viewcellbb.min.toivec().add(viewcellbb.max.toivec()).shr(1)), dmax = ivec(dmin).add(csize);
+            dmin.mul(dmin);
+            dmax.mul(dmax);
+            ivec diff = ivec(dmax).sub(dmin);
+            cullorder order[8];
+            int dir = 0;
+            if(diff.x < 0) { diff.x = -diff.x; dir |= 1; }
+            if(diff.y < 0) { diff.y = -diff.y; dir |= 2; }
+            if(diff.z < 0) { diff.z = -diff.z; dir |= 4; }
+            order[0] = cullorder(0, 0);
+            order[7] = cullorder(7, diff.x + diff.y + diff.z);
+            order[1] = cullorder(1, diff.x);
+            order[2] = cullorder(2, diff.y);
+            order[3] = cullorder(4, diff.z);
+            if(order[2].dist < order[1].dist) swap(order[1], order[2]);
+            if(order[3].dist < order[2].dist) swap(order[2], order[3]);
+            if(order[2].dist < order[1].dist) swap(order[1], order[2]);
+            cullorder dxy(order[1].index|order[2].index, order[1].dist+order[2].dist),
+                      dxz(order[1].index|order[3].index, order[1].dist+order[3].dist),
+                      dyz(order[2].index|order[3].index, order[2].dist+order[3].dist);
+            int j;
+            for(j = 4; j > 0 && dxy.dist < order[j-1].dist; --j) order[j] = order[j-1]; order[j] = dxy;
+            for(j = 5; j > 0 && dxz.dist < order[j-1].dist; --j) order[j] = order[j-1]; order[j] = dxz;
+            for(j = 6; j > 0 && dyz.dist < order[j-1].dist; --j) order[j] = order[j-1]; order[j] = dyz;
             loopi(8)
             {
-                ivec o(i, co.x, co.y, co.z, size>>1);
-                cullpvs(children[i], o, size>>1);
+                int index = order[i].index^dir;
+                ivec o(index, co.x, co.y, co.z, csize);
+                cullpvs(children[index], o, csize);
             }
             if(!(p.flags & PVS_HIDE_BB)) return;
         }
         bvec edges = p.children ? bvec(0x80, 0x80, 0x80) : p.edges;
         if(edges.x==0xFF) return;
         shaftbb geom(co, size, edges);
+        ivec diff = geom.max.toivec().sub(viewcellbb.min.toivec()).abs();
+        cullorder order[3] = { cullorder(0, diff.x), cullorder(1, diff.y), cullorder(2, diff.z) };
+        if(order[1].dist > order[0].dist) swap(order[0], order[1]);
+        if(order[2].dist > order[1].dist) swap(order[1], order[2]);
+        if(order[1].dist > order[0].dist) swap(order[0], order[1]);
         loopi(6)
         {
-            int dim = dimension(i), dc = dimcoord(i), r = R[dim], c = C[dim];
+            int dim = order[i >= 3 ? i-3 : i].index, dc = (i >= 3) != (geom.max[dim] <= viewcellbb.min[dim]) ? 1 : 0, r = R[dim], c = C[dim];
             int ccenter = geom.min[c];
             if(geom.min[r]==geom.max[r] || geom.min[c]==geom.max[c]) continue;
             while(ccenter < geom.max[c])
@@ -804,7 +845,7 @@ struct viewcellnode
     }
 };
 
-VARP(pvsthreads, 1, 1, 16);
+VARP(pvsthreads, 0, 0, 16);
 static vector<pvsworker *> pvsworkers;
 
 static volatile bool check_genpvs_progress = false;
@@ -853,7 +894,7 @@ static inline bool isallclip(cube *c)
     loopi(8)
     {
         cube &h = c[i];
-        if(h.children ? !isallclip(h.children) : (!isentirelysolid(h) && (!h.ext || (h.ext->material&MATF_CLIP)!=MAT_CLIP)))
+        if(h.children ? !isallclip(h.children) : (!isentirelysolid(h) && (h.material&MATF_CLIP)!=MAT_CLIP))
             return false;
     }
     return true;
@@ -876,7 +917,7 @@ static int countviewcells(cube *c, const ivec &co, int size, int threshold)
             }
             if(isallclip(h.children)) continue;
         }
-        else if(isentirelysolid(h) || (h.ext && (h.ext->material&MATF_CLIP)==MAT_CLIP)) continue;
+        else if(isentirelysolid(h) || (h.material&MATF_CLIP)==MAT_CLIP) continue;
         count++;
     }
     return count;
@@ -901,8 +942,8 @@ static void genviewcells(viewcellnode &p, cube *c, const ivec &co, int size, int
             }
             if(isallclip(h.children)) continue;
         }
-        else if(isentirelysolid(h) || (h.ext && (h.ext->material&MATF_CLIP)==MAT_CLIP)) continue;
-        if(pvsthreads<=1)
+        else if(isentirelysolid(h) || (h.material&MATF_CLIP)==MAT_CLIP) continue;
+        if(pvsworkers.length())
         {
             if(genpvs_canceled) return;
             p.children[i].pvs = pvsworkers[0]->genviewcell(o, size);
@@ -1010,7 +1051,7 @@ static void findwaterplanes()
         loopj(va->matsurfs)
         {
             materialsurface &m = va->matbuf[j];
-            if(m.material!=MAT_WATER || m.orient==O_BOTTOM) continue;
+            if((m.material&MATF_VOLUME)!=MAT_WATER || m.orient==O_BOTTOM) { j += m.skip; continue; }
             if(m.orient!=O_TOP)
             {
                 waterfalls.add(&m);
@@ -1100,14 +1141,15 @@ void genpvs(int *viewcellsize)
     genpvs_canceled = false;
     check_genpvs_progress = false;
     SDL_TimerID timer = NULL;
-    if(pvsthreads<=1) 
+    int numthreads = pvsthreads > 0 ? pvsthreads : numcpus;
+    if(numthreads<=1) 
     {
         pvsworkers.add(new pvsworker);
         timer = SDL_AddTimer(500, genpvs_timer, NULL);
     }
     viewcells = new viewcellnode;
     genviewcells(*viewcells, worldroot, ivec(0, 0, 0), worldsize>>1, *viewcellsize>0 ? *viewcellsize : 32);
-    if(pvsthreads<=1)
+    if(numthreads<=1)
     {
         SDL_RemoveTimer(timer);
     }
@@ -1116,7 +1158,7 @@ void genpvs(int *viewcellsize)
         renderprogress(0, "creating threads");
         if(!pvsmutex) pvsmutex = SDL_CreateMutex();
         if(!viewcellmutex) viewcellmutex = SDL_CreateMutex();
-        loopi(pvsthreads)
+        loopi(numthreads)
         {
             pvsworker *w = pvsworkers.add(new pvsworker);
             w->thread = SDL_CreateThread(pvsworker::run, w);

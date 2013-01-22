@@ -34,7 +34,7 @@ namespace game
         {
             state = CS_ALIVE;
             type = ENT_INANIMATE;
-            yaw = float((e.attr1+7)-(e.attr1+7)%15);
+            yaw = e.attr1;
             if(e.type==PLATFORM || e.type==ELEVATOR) 
             {
                 maxspeed = e.attr4 ? fabs(float(e.attr4)) : PLATFORMSPEED;
@@ -151,7 +151,7 @@ namespace game
             else if(m->exploding && lastmillis >= m->exploding)
             {
                 m->explode(m);
-                adddecal(DECAL_SCORCH, m->o, vec(0, 0, 1), RL_DAMRAD/2);
+                adddecal(DECAL_SCORCH, m->o, vec(0, 0, 1), guns[GUN_BARREL].exprad/2);
             }
             else if(m->maymove() || (m->stacked && (m->stacked->state!=CS_ALIVE || m->stackpos != m->stacked->o)))
             {

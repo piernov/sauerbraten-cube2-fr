@@ -4,15 +4,29 @@ Texture *sky[6] = { 0, 0, 0, 0, 0, 0 }, *clouds[6] = { 0, 0, 0, 0, 0, 0 };
 
 void loadsky(const char *basename, Texture *texs[6])
 {
+    const char *wildcard = strchr(basename, '*');
     loopi(6)
     {
         const char *side = cubemapsides[i].name;
-        defformatstring(name)("%s_%s.jpg", makerelpath("packages", basename), side);
-        if((texs[i] = textureload(name, 3, true, false))==notexture)
+        string name;
+        copystring(name, makerelpath("packages", basename));
+        if(wildcard)
         {
-            strcpy(name+strlen(name)-3, "png");
-            if((texs[i] = textureload(name, 3, true, false))==notexture) conoutf(CON_ERROR, "could not load sky texture packages/%s_%s", basename, side);
+            char *chop = strchr(name, '*');
+            if(chop) { *chop = '\0'; concatstring(name, side); concatstring(name, wildcard+1); }
+            texs[i] = textureload(name, 3, true, false); 
         }
+        else
+        {
+            defformatstring(ext)("_%s.jpg", side);
+            concatstring(name, ext);
+            if((texs[i] = textureload(name, 3, true, false))==notexture)
+            {
+                strcpy(name+strlen(name)-3, "png");
+                texs[i] = textureload(name, 3, true, false);
+            }
+        }
+        if(texs[i]==notexture) conoutf(CON_ERROR, "could not load side %s of sky texture %s", side, basename);
     }
 }
 
@@ -20,12 +34,21 @@ Texture *cloudoverlay = NULL;
 
 Texture *loadskyoverlay(const char *basename)
 {
-    defformatstring(name)("%s.jpg", makerelpath("packages", basename));
-    Texture *t = textureload(name, 0, true, false);
-    if(t!=notexture) return t;
-    strcpy(name+strlen(name)-3, "png");
-    t = textureload(name, 0, true, false);
-    if(t==notexture) conoutf(CON_ERROR, "could not load sky overlay texture packages/%s", basename);
+    const char *ext = strrchr(basename, '.'); 
+    string name;
+    copystring(name, makerelpath("packages", basename));
+    Texture *t = notexture;
+    if(ext) t = textureload(name, 0, true, false);
+    else
+    {
+        concatstring(name, ".jpg");
+        if((t = textureload(name, 0, true, false)) == notexture)
+        {
+            strcpy(name+strlen(name)-3, "png");
+            t = textureload(name, 0, true, false);
+        }
+    }
+    if(t==notexture) conoutf(CON_ERROR, "could not load sky overlay texture %s", basename);
     return t;
 }
 
@@ -40,6 +63,8 @@ FVARR(spinclouds, -720, 0, 720);
 VARR(yawclouds, 0, 0, 360);
 FVARR(cloudclip, 0, 0.5f, 1);
 SVARFR(cloudlayer, "", { if(cloudlayer[0]) cloudoverlay = loadskyoverlay(cloudlayer); });
+FVARR(cloudoffsetx, 0, 0, 1);
+FVARR(cloudoffsety, 0, 0, 1);
 FVARR(cloudscrollx, -16, 0, 16);
 FVARR(cloudscrolly, -16, 0, 16);
 FVARR(cloudscale, 0.001, 1, 64);
@@ -189,17 +214,10 @@ static void subdivide(int depth, int face)
     loopi(3) genface(depth, idx[i], idx[3+i], idx[3+(i+2)%3]);
 }
 
-static int sortdomecap(const GLushort *x, const GLushort *y)
+static int sortdomecap(GLushort x, GLushort y)
 {
-    const vec &xv = domeverts[*x].pos, &yv = domeverts[*y].pos;
-    if(xv.y < 0)
-    {
-        if(yv.y >= 0 || xv.x < yv.x) return -1;
-        if(xv.x > yv.x) return 1;
-    }
-    else if(yv.y < 0 || xv.x < yv.x) return 1;
-    else if(xv.x > yv.x) return -1;
-    return 0;
+    const vec &xv = domeverts[x].pos, &yv = domeverts[y].pos;
+    return xv.y < 0 ? yv.y >= 0 || xv.x < yv.x : yv.y >= 0 && xv.x > yv.x;
 }
 
 static void initdome(const bvec &color, float minalpha = 0.0f, float maxalpha = 1.0f, float capsize = -1, float clipz = 1, int hres = 16, int depth = 2)
@@ -213,30 +231,23 @@ static void initdome(const bvec &color, float minalpha = 0.0f, float maxalpha = 
     if(clipz >= 1)
     {
         domeverts[domenumverts++] = domevert(vec(0.0f, 0.0f, 1.0f), color, minalpha); //build initial 'hres' sided pyramid
-        loopi(hres)
-        {
-            float angle = 2*M_PI*float(i)/hres;
-            domeverts[domenumverts++] = domevert(vec(cosf(angle), sinf(angle), 0.0f), color, maxalpha);
-        }
+        loopi(hres) domeverts[domenumverts++] = domevert(vec(sincos360[(360*i)/hres], 0.0f), color, maxalpha);
         loopi(hres) genface(depth, 0, i+1, 1+(i+1)%hres);
     }
     else if(clipz <= 0)
     {
-        loopi(hres<<depth)
-        {
-            float angle = 2*M_PI*float(i)/(hres<<depth), x = cosf(angle), y = sinf(angle);
-            domeverts[domenumverts++] = domevert(vec(x, y, 0.0f), color, maxalpha);
-        }
+        loopi(hres<<depth) domeverts[domenumverts++] = domevert(vec(sincos360[(360*i)/(hres<<depth)], 0.0f), color, maxalpha);
     }
     else
     {
-        float clipxy = sqrtf(1 - clipz*clipz), xm = cosf(M_PI/hres), ym = sinf(M_PI/hres);
+        float clipxy = sqrtf(1 - clipz*clipz);
+        const vec2 &scm = sincos360[180/hres];
         loopi(hres)
         {
-            float angle = 2*M_PI*float(i)/hres, x = cosf(angle), y = sinf(angle);
-            domeverts[domenumverts++] = domevert(vec(x*clipxy, y*clipxy, clipz), color, minalpha);
-            domeverts[domenumverts++] = domevert(vec(x, y, 0.0f), color, maxalpha);
-            domeverts[domenumverts++] = domevert(vec(x*xm - y*ym, y*xm + x*ym, 0.0f), color, maxalpha);
+            const vec2 &sc = sincos360[(360*i)/hres];
+            domeverts[domenumverts++] = domevert(vec(sc.x*clipxy, sc.y*clipxy, clipz), color, minalpha);
+            domeverts[domenumverts++] = domevert(vec(sc.x, sc.y, 0.0f), color, maxalpha);
+            domeverts[domenumverts++] = domevert(vec(sc.x*scm.x - sc.y*scm.y, sc.y*scm.x + sc.x*scm.y, 0.0f), color, maxalpha);
         }
         loopi(hres)
         {
@@ -467,12 +478,7 @@ void drawskybox(int farplane, bool limited)
     }
     if(skyclip) skyclip = 0.5f + 0.5f*(skyclip-camera1->o.z)/float(worldsize); 
 
-    if(glaring)
-    {
-        static Shader *skyboxglareshader = NULL;
-        if(!skyboxglareshader) skyboxglareshader = lookupshaderbyname("skyboxglare");
-        skyboxglareshader->set();
-    }
+    if(glaring) SETSHADER(skyboxglare);
     else defaultshader->set();
 
     glDisable(GL_FOG);
@@ -542,7 +548,7 @@ void drawskybox(int farplane, bool limited)
         glRotatef(camera1->pitch, -1, 0, 0);
         glRotatef(camera1->yaw+spincloudlayer*lastmillis/1000.0f+yawcloudlayer, 0, 0, -1);
         if(reflecting) glScalef(1, 1, -1);
-        draw_env_overlay(farplane/2, cloudoverlay, cloudscrollx * lastmillis/1000.0f, cloudscrolly * lastmillis/1000.0f);
+        draw_env_overlay(farplane/2, cloudoverlay, cloudoffsetx + cloudscrollx * lastmillis/1000.0f, cloudoffsety + cloudscrolly * lastmillis/1000.0f);
         glPopMatrix();
 
         glDisable(GL_BLEND);

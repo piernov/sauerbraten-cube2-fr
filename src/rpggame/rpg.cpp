@@ -188,6 +188,10 @@ namespace game
     {
     }
 
+    void renderplayerpreview(int model, int team, int weap)
+    {
+    }
+
     bool canjump() { return true; }
     bool allowmove(physent *d) { return d->type!=ENT_AI || ((rpgent *)d)->allowmove(); }
     void doattack(bool on) { player1->attacking = on; }
@@ -239,7 +243,7 @@ namespace game
     {
     }
 
-    void dynlighttrack(physent *owner, vec &o)
+    void dynlighttrack(physent *owner, vec &o, vec &hud)
     {
     }
 
@@ -268,6 +272,8 @@ namespace game
     void writeclientinfo(stream *f) {}
     void toserver(char *text) {}
     bool ispaused() { return false; }
+    int scaletime(int t) { return t*100; }
+    bool allowmouselook() { return true; }
 }
 
 namespace server
@@ -297,5 +303,6 @@ namespace server
     int laninfoport() { return 0; }
     void processmasterinput(const char *cmd, int cmdlen, const char *args) {}
     bool ispaused() { return false; }
+    int scaletime(int t) { return t*100; }
 }
 

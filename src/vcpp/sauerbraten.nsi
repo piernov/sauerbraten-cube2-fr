@@ -1,6 +1,6 @@
 Name "Sauerbraten"
 
-OutFile "sauerbraten_20YY_MM_DD_foo_edition_win32_setup.exe"
+OutFile "sauerbraten_2013_01_20_collect_edition_windows.exe"
 
 InstallDir $PROGRAMFILES\Sauerbraten
 
@@ -32,10 +32,10 @@ Section "Sauerbraten (required)"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Sauerbraten" "NoRepair" 1
   WriteUninstaller "uninstall.exe"
 
-  IfFileExists "$INSTDIR\config.cfg" ConfigFound NoConfig  
+  IfFileExists "$DOCUMENTS\My Games\Sauerbraten\config.cfg" ConfigFound NoConfig  
   ConfigFound:
-     Delete "$INSTDIR\old-config.cfg"
-     Rename "$INSTDIR\config.cfg" "$INSTDIR\old-config.cfg"
+     Delete "$DOCUMENTS\My Games\Sauerbraten\old-config.cfg"
+     Rename "$DOCUMENTS\My Games\Sauerbraten\config.cfg" "$DOCUMENTS\My Games\Sauerbraten\old-config.cfg"
   NoConfig:
 
 SectionEnd
@@ -46,8 +46,8 @@ Section "Start Menu Shortcuts"
   
   SetOutPath "$INSTDIR"
   
-  CreateShortCut "$INSTDIR\Sauerbraten.lnk"                "$INSTDIR\sauerbraten.bat" "" "$INSTDIR\bin\sauerbraten.exe" 0
-  CreateShortCut "$SMPROGRAMS\Sauerbraten\Sauerbraten.lnk" "$INSTDIR\sauerbraten.bat" "" "$INSTDIR\bin\sauerbraten.exe" 0
+  CreateShortCut "$INSTDIR\Sauerbraten.lnk"                "$INSTDIR\sauerbraten.bat" "" "$INSTDIR\bin\sauerbraten.exe" 0 SW_SHOWMINIMIZED
+  CreateShortCut "$SMPROGRAMS\Sauerbraten\Sauerbraten.lnk" "$INSTDIR\sauerbraten.bat" "" "$INSTDIR\bin\sauerbraten.exe" 0 SW_SHOWMINIMIZED
   CreateShortCut "$SMPROGRAMS\Sauerbraten\Uninstall.lnk"   "$INSTDIR\uninstall.exe"   "" "$INSTDIR\uninstall.exe" 0
   CreateShortCut "$SMPROGRAMS\Sauerbraten\README.lnk"      "$INSTDIR\README.html"     "" "$INSTDIR\README.html" 0
   

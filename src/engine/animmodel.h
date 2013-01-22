@@ -15,11 +15,12 @@ struct animmodel : model
 
     struct animpos
     {
-        int fr1, fr2;
+        int anim, fr1, fr2;
         float t;
 
         void setframes(const animinfo &info)
         {
+            anim = info.anim;
             if(info.range<=1) 
             {
                 fr1 = 0;
@@ -58,7 +59,6 @@ struct animmodel : model
     struct animstate
     {
         part *owner;
-        int anim;
         animpos cur, prev;
         float interp;
 
@@ -74,10 +74,10 @@ struct animmodel : model
         part *owner;
         Texture *tex, *masks, *envmap, *unlittex, *normalmap;
         Shader *shader;
-        float spec, ambient, glow, specglare, glowglare, fullbright, envmapmin, envmapmax, scrollu, scrollv, alphatest;
+        float spec, ambient, glow, glowdelta, glowpulse, specglare, glowglare, fullbright, envmapmin, envmapmax, scrollu, scrollv, alphatest;
         bool alphablend, cullface;
 
-        skin() : owner(0), tex(notexture), masks(notexture), envmap(NULL), unlittex(NULL), normalmap(NULL), shader(NULL), spec(1.0f), ambient(0.3f), glow(3.0f), specglare(1), glowglare(1), fullbright(0), envmapmin(0), envmapmax(0), scrollu(0), scrollv(0), alphatest(0.9f), alphablend(true), cullface(true) {}
+        skin() : owner(0), tex(notexture), masks(notexture), envmap(NULL), unlittex(NULL), normalmap(NULL), shader(NULL), spec(1.0f), ambient(0.3f), glow(3.0f), glowdelta(0), glowpulse(0), specglare(1), glowglare(1), fullbright(0), envmapmin(0), envmapmax(0), scrollu(0), scrollv(0), alphatest(0.9f), alphablend(true), cullface(true) {}
 
         bool multitextured() { return enableglow; }
         bool envmapped() { return hasCM && envmapmax>0 && envmapmodels && (renderpath!=R_FIXEDFUNCTION || maxtmus >= 3); }
@@ -98,7 +98,7 @@ struct animmodel : model
                 if(!enablerescale) { glEnable(hasRN ? GL_RESCALE_NORMAL_EXT : GL_NORMALIZE); enablerescale = true; }
             }
             if(masked!=enableglow) lasttex = lastmasks = NULL;
-            float mincolor = as->anim&ANIM_FULLBRIGHT ? fullbrightmodels/100.0f : 0.0f;
+            float mincolor = as->cur.anim&ANIM_FULLBRIGHT ? fullbrightmodels/100.0f : 0.0f;
             vec color = vec(lightcolor).max(mincolor), matcolor(1, 1, 1);
             if(masked)
             {
@@ -156,20 +156,29 @@ struct animmodel : model
             if(fullbright)
             {
                 glColor4f(fullbright/2, fullbright/2, fullbright/2, transparent);
-                setenvparamf("lightscale", SHPARAM_VERTEX, 2, 0, 2, glow);
-                setenvparamf("lightscale", SHPARAM_PIXEL, 2, 0, 2, glow);
+                setenvparamf("lightscale", SHPARAM_VERTEX, 2, 0, 0, 2);
+                setenvparamf("lightscale", SHPARAM_PIXEL, 2, 0, 0, 2);
             }
             else
             {
-                float mincolor = as->anim&ANIM_FULLBRIGHT ? fullbrightmodels/100.0f : 0.0f, minshade = max(ambient, mincolor);
+                float mincolor = as->cur.anim&ANIM_FULLBRIGHT ? fullbrightmodels/100.0f : 0.0f, 
+                      bias = max(mincolor-1.0f, 0.2f), scale = 0.5f*max(0.8f-bias, 0.0f), 
+                      minshade = scale*max(ambient, mincolor);
                 vec color = vec(lightcolor).max(mincolor);
                 glColor4f(color.x, color.y, color.z, transparent);
-                setenvparamf("lightscale", SHPARAM_VERTEX, 2, spec, minshade, glow);
-                setenvparamf("lightscale", SHPARAM_PIXEL, 2, spec, minshade, glow);
+                setenvparamf("lightscale", SHPARAM_VERTEX, 2, scale - minshade, scale, minshade + bias);
+                setenvparamf("lightscale", SHPARAM_PIXEL, 2, scale - minshade, scale, minshade + bias);
             }
+            float curglow = glow;
+            if(glowpulse > 0)
+            {
+                float curpulse = lastmillis*glowpulse;
+                curpulse -= floor(curpulse);
+                curglow += glowdelta*2*fabs(curpulse - 0.5f);
+            }
+            setenvparamf("maskscale", SHPARAM_PIXEL, 4, 0.5f*spec*lightmodels, 0.5f*curglow*glowmodels, 16*specglare, 4*glowglare);
             setenvparamf("texscroll", SHPARAM_VERTEX, 5, lastmillis/1000.0f, scrollu*lastmillis/1000.0f, scrollv*lastmillis/1000.0f);
             if(envmaptmu>=0 && envmapmax>0) setenvparamf("envmapscale", bumpmapped() ? SHPARAM_PIXEL : SHPARAM_VERTEX, 3, envmapmin-envmapmax, envmapmax);
-            if(glaring) setenvparamf("glarescale", SHPARAM_PIXEL, 4, 16*specglare, 4*glowglare);
         }
 
         Shader *loadshader(bool shouldenvmap, bool masked)
@@ -208,7 +217,7 @@ struct animmodel : model
 
         void preloadBIH()
         {
-            if(tex && tex->bpp==4 && !tex->alphamask) loadalphamask(tex);
+            if(tex && tex->type&Texture::ALPHA && !tex->alphamask) loadalphamask(tex);
         }
  
         void preloadshader()
@@ -234,7 +243,7 @@ struct animmodel : model
             if(!cullface && enablecullface) { glDisable(GL_CULL_FACE); enablecullface = false; }
             else if(cullface && !enablecullface) { glEnable(GL_CULL_FACE); enablecullface = true; }
 
-            if(as->anim&ANIM_NOSKIN)
+            if(as->cur.anim&ANIM_NOSKIN)
             {
                 if(enablealphatest) { glDisable(GL_ALPHA_TEST); enablealphatest = false; }
                 if(enablealphablend) { glDisable(GL_BLEND); enablealphablend = false; }
@@ -243,7 +252,7 @@ struct animmodel : model
                 if(enablelighting) { glDisable(GL_LIGHTING); enablelighting = false; }
                 if(enablerescale) { glDisable(hasRN ? GL_RESCALE_NORMAL_EXT : GL_NORMALIZE); enablerescale = false; }
                 if(shadowmapping) SETMODELSHADER(b, shadowmapcaster);
-                else /*if(as->anim&ANIM_SHADOW)*/ SETMODELSHADER(b, notexturemodel);
+                else /*if(as->cur.anim&ANIM_SHADOW)*/ SETMODELSHADER(b, notexturemodel);
                 return;
             }
             Texture *s = bumpmapped() && unlittex ? unlittex : tex, 
@@ -258,20 +267,21 @@ struct animmodel : model
                 setshaderparams(b, as, m!=notexture);
                 setshader(b, as, m!=notexture);
             }
+            int activetmu = 0;
             if(s!=lasttex)
             {
-                if(enableglow) glActiveTexture_(GL_TEXTURE1_ARB);
+                if(enableglow) { glActiveTexture_(GL_TEXTURE1_ARB); activetmu = 1; }
                 glBindTexture(GL_TEXTURE_2D, s->id);
-                if(enableglow) glActiveTexture_(GL_TEXTURE0_ARB);
                 lasttex = s;
             }
             if(n && n!=lastnormalmap)
             {
                 glActiveTexture_(GL_TEXTURE3_ARB);
+                activetmu = 3;
                 glBindTexture(GL_TEXTURE_2D, n->id);
-                glActiveTexture_(GL_TEXTURE0_ARB);
+                lastnormalmap = n;
             }
-            if(s->bpp==4)
+            if(s->type&Texture::ALPHA)
             {
                 if(alphablend)
                 {
@@ -301,9 +311,9 @@ struct animmodel : model
             }
             if(m!=lastmasks && m!=notexture)
             {
-                if(!enableglow) glActiveTexture_(GL_TEXTURE1_ARB);
+                if(!enableglow) { glActiveTexture_(GL_TEXTURE1_ARB); activetmu = 1; }
+                else if(activetmu != 0) { glActiveTexture_(GL_TEXTURE0_ARB); activetmu = 0; }
                 glBindTexture(GL_TEXTURE_2D, m->id);
-                if(!enableglow) glActiveTexture_(GL_TEXTURE0_ARB);
                 lastmasks = m;
             }
             if((renderpath!=R_FIXEDFUNCTION || m!=notexture) && envmaptmu>=0 && envmapmax>0)
@@ -312,6 +322,7 @@ struct animmodel : model
                 if(!enableenvmap || lastenvmaptex!=emtex)
                 {
                     glActiveTexture_(GL_TEXTURE0_ARB+envmaptmu);
+                    activetmu = envmaptmu;
                     if(!enableenvmap)
                     {
                         glEnable(GL_TEXTURE_CUBE_MAP_ARB);
@@ -328,10 +339,10 @@ struct animmodel : model
                         if(!enablerescale) { glEnable(hasRN ? GL_RESCALE_NORMAL_EXT : GL_NORMALIZE); enablerescale = true; }
                     }
                     if(lastenvmaptex!=emtex) { glBindTexture(GL_TEXTURE_CUBE_MAP_ARB, emtex); lastenvmaptex = emtex; }
-                    glActiveTexture_(GL_TEXTURE0_ARB);
                 }
             }
-            else if(enableenvmap) disableenvmap();
+            else if(enableenvmap) { disableenvmap(); activetmu = 0; }
+            if(activetmu != 0) glActiveTexture_(GL_TEXTURE0_ARB);
         }
     };
 
@@ -360,6 +371,121 @@ struct animmodel : model
             if(glaring) s->setvariant(0, 2);
             else s->set(); 
         }
+
+        template<class V, class T> void smoothnorms(V *verts, int numverts, T *tris, int numtris, float limit, bool areaweight)
+        {
+            hashtable<vec, int> share;
+            int *next = new int[numverts];
+            memset(next, -1, numverts*sizeof(int));
+            loopi(numverts)
+            {
+                V &v = verts[i];
+                v.norm = vec(0, 0, 0);
+                int idx = share.access(v.pos, i);
+                if(idx != i) { next[i] = next[idx]; next[idx] = i; }
+            }
+            loopi(numtris)
+            {
+                T &t = tris[i];
+                V &v1 = verts[t.vert[0]], &v2 = verts[t.vert[1]], &v3 = verts[t.vert[2]];
+                vec norm;
+                norm.cross(vec(v2.pos).sub(v1.pos), vec(v3.pos).sub(v1.pos));
+                if(!areaweight) norm.normalize();
+                v1.norm.add(norm);
+                v2.norm.add(norm);
+                v3.norm.add(norm);
+            }
+            vec *norms = new vec[numverts];
+            memset(norms, 0, numverts*sizeof(vec));
+            loopi(numverts)
+            {
+                V &v = verts[i];
+                norms[i].add(v.norm);
+                if(next[i] >= 0)
+                {
+                    float vlimit = limit*v.norm.magnitude();
+                    for(int j = next[i]; j >= 0; j = next[j])
+                    {
+                        V &o = verts[j];
+                        if(v.norm.dot(o.norm) >= vlimit*o.norm.magnitude())
+                        {
+                            norms[i].add(o.norm);
+                            norms[j].add(v.norm);
+                        }
+                    }
+                }
+            }
+            loopi(numverts) verts[i].norm = norms[i].normalize();
+            delete[] next;
+            delete[] norms;
+        }
+
+        template<class V, class T> void buildnorms(V *verts, int numverts, T *tris, int numtris, bool areaweight)
+        {
+            loopi(numverts) verts[i].norm = vec(0, 0, 0);
+            loopi(numtris)
+            {
+                T &t = tris[i];
+                V &v1 = verts[t.vert[0]], &v2 = verts[t.vert[1]], &v3 = verts[t.vert[2]];
+                vec norm;
+                norm.cross(vec(v2.pos).sub(v1.pos), vec(v3.pos).sub(v1.pos));
+                if(!areaweight) norm.normalize();
+                v1.norm.add(norm);
+                v2.norm.add(norm);
+                v3.norm.add(norm);
+            }
+            loopi(numverts) verts[i].norm.normalize();
+        }
+        
+        template<class B, class V, class TC, class T> void calctangents(B *bumpverts, V *verts, TC *tcverts, int numverts, T *tris, int numtris, bool areaweight)
+        {
+            vec *tangent = new vec[2*numverts], *bitangent = tangent+numverts;
+            memset(tangent, 0, 2*numverts*sizeof(vec));
+            loopi(numtris)
+            {
+                const T &t = tris[i];
+                const vec &e0 = verts[t.vert[0]].pos;
+                vec e1 = vec(verts[t.vert[1]].pos).sub(e0), e2 = vec(verts[t.vert[2]].pos).sub(e0);
+
+                const TC &tc0 = tcverts[t.vert[0]],
+                         &tc1 = tcverts[t.vert[1]],
+                         &tc2 = tcverts[t.vert[2]];
+                float u1 = tc1.u - tc0.u, v1 = tc1.v - tc0.v,
+                      u2 = tc2.u - tc0.u, v2 = tc2.v - tc0.v;
+                vec u(e2), v(e2);
+                u.mul(v1).sub(vec(e1).mul(v2));
+                v.mul(u1).sub(vec(e1).mul(u2));
+
+                if(vec().cross(e2, e1).dot(vec().cross(v, u)) >= 0)
+                {
+                    u.neg();
+                    v.neg();
+                }
+
+                if(!areaweight)
+                {
+                    u.normalize();
+                    v.normalize();
+                }
+
+                loopj(3)
+                {
+                    tangent[t.vert[j]].sub(u);
+                    bitangent[t.vert[j]].add(v);
+                }
+            }
+            loopi(numverts)
+            {
+                const vec &n = verts[i].norm,
+                          &t = tangent[i],
+                          &bt = bitangent[i];
+                B &bv = bumpverts[i];
+                (bv.tangent = t).sub(vec(n).mul(n.dot(t))).normalize();
+                bv.bitangent = vec().cross(n, t).dot(bt) < 0 ? -1 : 1;
+            }
+            delete[] tangent;
+        }
+    
     };
 
     struct meshgroup
@@ -392,7 +518,7 @@ struct animmodel : model
 
         void gentris(int frame, vector<skin> &skins, vector<BIH::tri> *tris, const matrix3x4 &m)
         {
-            loopv(meshes) meshes[i]->gentris(frame, skins[i].tex && skins[i].tex->bpp == 4 ? skins[i].tex : NULL, tris, m);
+            loopv(meshes) meshes[i]->gentris(frame, skins[i].tex && skins[i].tex->type&Texture::ALPHA ? skins[i].tex : NULL, tris, m);
         }
 
         virtual int totalframes() const { return 1; }
@@ -401,14 +527,15 @@ struct animmodel : model
         int clipframes(int i, int n) const { return min(n, totalframes() - i); }
 
         virtual void cleanup() {}
-        virtual void render(const animstate *as, float pitch, const vec &axis, dynent *d, part *p) {}
+        virtual void preload(part *p) {}
+        virtual void render(const animstate *as, float pitch, const vec &axis, const vec &forward, dynent *d, part *p) {}
     };
 
-    virtual meshgroup *loadmeshes(char *name, va_list args) { return NULL; }
+    virtual meshgroup *loadmeshes(const char *name, va_list args) { return NULL; }
 
-    meshgroup *sharemeshes(char *name, ...)
+    meshgroup *sharemeshes(const char *name, ...)
     {
-        static hashtable<char *, meshgroup *> meshgroups;
+        static hashtable<const char *, meshgroup *> meshgroups;
         if(!meshgroups.access(name))
         {
             va_list args;
@@ -539,13 +666,18 @@ struct animmodel : model
             loopv(skins) skins[i].preloadshader();
         }
 
+        void preloadmeshes()
+        {
+            if(meshes) meshes->preload(this);
+        }
+
         virtual void getdefaultanim(animinfo &info, int anim, uint varseed, dynent *d)
         {
             info.frame = 0;
             info.range = 1;
         }
 
-        bool calcanim(int animpart, int anim, int basetime, int basetime2, dynent *d, int interp, animinfo &info)
+        bool calcanim(int animpart, int anim, int basetime, int basetime2, dynent *d, int interp, animinfo &info, int &aitime)
         {
             uint varseed = uint((size_t)d);
             info.anim = anim;
@@ -563,11 +695,11 @@ struct animmodel : model
                 if(anims[animpart])
                 {
                     vector<animspec> &primary = anims[animpart][anim&ANIM_INDEX];
-                    if(primary.length()) spec = &primary[uint(varseed + basetime)%primary.length()];
+                    if(&primary < &anims[animpart][NUMANIMS] && primary.length()) spec = &primary[uint(varseed + basetime)%primary.length()];
                     if((anim>>ANIM_SECONDARY)&(ANIM_INDEX|ANIM_DIR))
                     {
                         vector<animspec> &secondary = anims[animpart][(anim>>ANIM_SECONDARY)&ANIM_INDEX];
-                        if(secondary.length())
+                        if(&secondary < &anims[animpart][NUMANIMS] && secondary.length())
                         {
                             animspec &spec2 = secondary[uint(varseed + basetime2)%secondary.length()];
                             if(!spec || spec2.priority > spec->priority)
@@ -590,15 +722,18 @@ struct animmodel : model
 
             info.anim &= (1<<ANIM_SECONDARY)-1;
             info.anim |= anim&ANIM_FLAGS;
-            if(info.anim&(ANIM_LOOP|ANIM_START|ANIM_END))
+            if((info.anim&ANIM_CLAMP) != ANIM_CLAMP)
             {
-                info.anim &= ~ANIM_SETTIME;
-                if(!info.basetime) info.basetime = -((int)(size_t)d&0xFFF);
-            }
-            if(info.anim&(ANIM_START|ANIM_END))
-            {
-                if(info.anim&ANIM_END) info.frame += info.range-1;
-                info.range = 1;
+                if(info.anim&(ANIM_LOOP|ANIM_START|ANIM_END))
+                {
+                    info.anim &= ~ANIM_SETTIME;
+                    if(!info.basetime) info.basetime = -((int)(size_t)d&0xFFF);
+                }
+                if(info.anim&(ANIM_START|ANIM_END))
+                {
+                    if(info.anim&ANIM_END) info.frame += info.range-1;
+                    info.range = 1;
+                }
             }
 
             if(!meshes->hasframes(info.frame, info.range))
@@ -610,19 +745,20 @@ struct animmodel : model
             if(d && interp>=0)
             {
                 animinterpinfo &ai = d->animinterp[interp];
+                if((info.anim&ANIM_CLAMP)==ANIM_CLAMP) aitime = min(aitime, int(info.range*info.speed*0.5e-3f));
                 if(d->ragdoll && !(anim&ANIM_RAGDOLL)) 
                 {
                     ai.prev.range = ai.cur.range = 0;
                     ai.lastswitch = -1;
                 }
-                else if(ai.lastmodel!=this || ai.lastswitch<0 || lastmillis-d->lastrendered>animationinterpolationtime)
+                else if(ai.lastmodel!=this || ai.lastswitch<0 || lastmillis-d->lastrendered>aitime)
                 {
                     ai.prev = ai.cur = info;
-                    ai.lastswitch = lastmillis-animationinterpolationtime*2;
+                    ai.lastswitch = lastmillis-aitime*2;
                 }
                 else if(ai.cur!=info)
                 {
-                    if(lastmillis-ai.lastswitch>animationinterpolationtime/2) ai.prev = ai.cur;
+                    if(lastmillis-ai.lastswitch>aitime/2) ai.prev = ai.cur;
                     ai.cur = info;
                     ai.lastswitch = lastmillis;
                 }
@@ -632,61 +768,47 @@ struct animmodel : model
             return true;
         }
 
-        float calcpitchaxis(int anim, float pitch, vec &axis, vec &dir, vec &campos)
-        {
-            float angle = pitchscale*pitch + pitchoffset;
-            if(pitchmin || pitchmax) angle = max(pitchmin, min(pitchmax, angle));
-            if(!angle) return 0;
-
-            float c = cosf(-angle*RAD), s = sinf(-angle*RAD);
-            vec d(axis);
-            axis.rotate(c, s, d);
-            if(!(anim&ANIM_NOSKIN))
-            {
-                dir.rotate(c, s, d);
-                campos.rotate(c, s, d);
-            }
-
-            return angle;
-        }
-
-        void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, dynent *d, const vec &dir, const vec &campos)
+        void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, const vec &forward, dynent *d)
         {
             animstate as[MAXANIMPARTS];
-            render(anim, basetime, basetime2, pitch, axis, d, dir, campos, as);
+            render(anim, basetime, basetime2, pitch, axis, forward, d, as);
         }
 
-        void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, dynent *d, const vec &dir, const vec &campos, animstate *as)
+        void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, const vec &forward, dynent *d, animstate *as)
         {
             if(!(anim&ANIM_REUSE)) loopi(numanimparts)
             {
                 animinfo info;
-                int interp = d && index+numanimparts<=MAXANIMPARTS ? index+i : -1;
-                if(!calcanim(i, anim, basetime, basetime2, d, interp, info)) return;
+                int interp = d && index+numanimparts<=MAXANIMPARTS ? index+i : -1, aitime = animationinterpolationtime;
+                if(!calcanim(i, anim, basetime, basetime2, d, interp, info, aitime)) return;
                 animstate &p = as[i];
                 p.owner = this;
-                p.anim = info.anim;
                 p.cur.setframes(info);
                 p.interp = 1;
                 if(interp>=0 && d->animinterp[interp].prev.range>0)
                 {
                     int diff = lastmillis-d->animinterp[interp].lastswitch;
-                    if(diff<animationinterpolationtime)
+                    if(diff<aitime)
                     {
                         p.prev.setframes(d->animinterp[interp].prev);
-                        p.interp = diff/float(animationinterpolationtime);
+                        p.interp = diff/float(aitime);
                     }
                 }
             }
 
-            vec raxis(axis), rdir(dir), rcampos(campos);
-            float pitchamount = calcpitchaxis(anim, pitch, raxis, rdir, rcampos);
+            vec oaxis, oforward;
+            matrixstack[matrixpos].transposedtransformnormal(axis, oaxis);
+            float pitchamount = pitchscale*pitch + pitchoffset;
+            if(pitchmin || pitchmax) pitchamount = clamp(pitchamount, pitchmin, pitchmax);
+            if(as->cur.anim&ANIM_NOPITCH || (as->interp < 1 && as->prev.anim&ANIM_NOPITCH))
+                pitchamount *= (as->cur.anim&ANIM_NOPITCH ? 0 : as->interp) + (as->interp < 1 && as->prev.anim&ANIM_NOPITCH ? 0 : 1-as->interp);
             if(pitchamount)
             {
                 ++matrixpos;
                 matrixstack[matrixpos] = matrixstack[matrixpos-1];
-                matrixstack[matrixpos].rotate(pitchamount*RAD, axis);
+                matrixstack[matrixpos].rotate(pitchamount*RAD, oaxis);
             }
+            matrixstack[matrixpos].transposedtransformnormal(forward, oforward);
 
             if(!(anim&ANIM_NORENDER))
             {
@@ -706,15 +828,17 @@ struct animmodel : model
             {
                 if(renderpath!=R_FIXEDFUNCTION)
                 {
-                    setenvparamf("lightdir", SHPARAM_VERTEX, 0, rdir.x, rdir.y, rdir.z);
-                    setenvparamf("lightdir", SHPARAM_PIXEL, 0, rdir.x, rdir.y, rdir.z);
-                    vec ocampos(rcampos);
+                    vec odir, ocampos;
+                    matrixstack[matrixpos].transposedtransformnormal(lightdir, odir);
+                    setenvparamf("lightdir", SHPARAM_VERTEX, 0, odir.x, odir.y, odir.z);
+                    setenvparamf("lightdir", SHPARAM_PIXEL, 0, odir.x, odir.y, odir.z);
+                    matrixstack[matrixpos].transposedtransform(camera1->o, ocampos);
                     ocampos.div(model->scale).sub(translate);
                     setenvparamf("camera", SHPARAM_VERTEX, 1, ocampos.x, ocampos.y, ocampos.z, 1);
                 }
             }
 
-            meshes->render(as, pitch, axis, d, this);
+            meshes->render(as, pitch, oaxis, oforward, d, this);
 
             if(!(anim&ANIM_NORENDER))
             {
@@ -739,14 +863,6 @@ struct animmodel : model
                         continue;
                     }
 
-                    vec naxis(raxis), ndir(rdir), ncampos(rcampos);
-                    link.matrix.invertnormal(naxis);
-                    if(!(anim&(ANIM_NOSKIN|ANIM_NORENDER)))
-                    {
-                        link.matrix.invertnormal(ndir);
-                        link.matrix.invertvertex(ncampos);
-                    }
-
                     int nanim = anim, nbasetime = basetime, nbasetime2 = basetime2;
                     if(link.anim>=0)
                     {
@@ -754,7 +870,7 @@ struct animmodel : model
                         nbasetime = link.basetime;
                         nbasetime2 = 0;
                     }
-                    link.p->render(nanim, nbasetime, nbasetime2, pitch, naxis, d, ndir, ncampos);
+                    link.p->render(nanim, nbasetime, nbasetime2, pitch, axis, forward, d);
 
                     matrixpos--;
                 }
@@ -789,7 +905,7 @@ struct animmodel : model
 
     virtual int linktype(animmodel *m) const { return LINK_TAG; }
 
-    void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, dynent *d, modelattach *a, const vec &dir, const vec &campos)
+    void render(int anim, int basetime, int basetime2, float pitch, const vec &axis, const vec &forward, dynent *d, modelattach *a)
     {
         if(!loaded) return;
 
@@ -826,7 +942,7 @@ struct animmodel : model
         }
 
         animstate as[MAXANIMPARTS];
-        parts[0]->render(anim, basetime, basetime2, pitch, axis, d, dir, campos, as);
+        parts[0]->render(anim, basetime, basetime2, pitch, axis, forward, d, as);
 
         if(a) for(int i = numtags-1; i >= 0; i--)
         {
@@ -845,12 +961,12 @@ struct animmodel : model
                     break;
 
                 case LINK_COOP:
-                    p->render(anim, basetime, basetime2, pitch, axis, d, dir, campos);
+                    p->render(anim, basetime, basetime2, pitch, axis, forward, d);
                     p->index = 0;
                     break;
 
                 case LINK_REUSE:
-                    p->render(anim | ANIM_REUSE, basetime, basetime2, pitch, axis, d, dir, campos, as); 
+                    p->render(anim | ANIM_REUSE, basetime, basetime2, pitch, axis, forward, d, as); 
                     break;
             }
         }
@@ -860,10 +976,10 @@ struct animmodel : model
     {
         if(!loaded) return;
 
-        vec rdir, campos;
-
-        yaw += offsetyaw + spinyaw*lastmillis/1000.0f;
+        yaw += spinyaw*lastmillis/1000.0f;
         pitch += offsetpitch + spinpitch*lastmillis/1000.0f;
+
+        vec axis(0, -1, 0), forward(1, 0, 0);
 
         matrixpos = 0;
         matrixstack[0].identity();
@@ -871,12 +987,15 @@ struct animmodel : model
         {
             matrixstack[0].translate(o);
             matrixstack[0].rotate_around_z(yaw*RAD);
+            matrixstack[0].transformnormal(vec(axis), axis);
+            matrixstack[0].transformnormal(vec(forward), forward);
+            if(offsetyaw) matrixstack[0].rotate_around_z(offsetyaw*RAD);
         }
         else pitch = 0;
 
         if(anim&ANIM_NORENDER)
         {
-            render(anim, basetime, basetime2, pitch, vec(0, -1, 0), d, a, rdir, campos);
+            render(anim, basetime, basetime2, pitch, axis, forward, d, a);
             if(d) d->lastrendered = lastmillis;
             return;
         }
@@ -890,16 +1009,8 @@ struct animmodel : model
             }
                 
             transparent = trans;
+            lightdir = dir;
             lightcolor = color;
-            
-            rdir = dir;
-            campos = camera1->o;
-            if(!d || !d->ragdoll || anim&ANIM_RAGDOLL) 
-            {
-                rdir.rotate_around_z(-yaw*RAD);
-                campos.sub(o);
-                campos.rotate_around_z(-yaw*RAD);
-            }
 
             if(envmapped()) envmaptmu = 2;
             else if(a) for(int i = 0; a[i].tag; i++) if(a[i].m && a[i].m->envmapped())
@@ -921,7 +1032,7 @@ struct animmodel : model
             if(renderpath==R_FIXEDFUNCTION)
             {
                 glActiveTexture_(GL_TEXTURE0_ARB+envmaptmu);
-                setuptmu(envmaptmu, "T , P @ Pa", "= Ca");
+                setuptmu(envmaptmu, "T , P @ Pa", hasTEX || hasTE4 ? "Ca * $1a" : "= Ca");
 
                 glMatrixMode(GL_TEXTURE);
                 glLoadMatrixf(envmatrix.v);
@@ -944,7 +1055,7 @@ struct animmodel : model
             else if(alphadepth)
             {
                 glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-                render(anim|ANIM_NOSKIN, basetime, basetime2, pitch, vec(0, -1, 0), d, a, rdir, campos);
+                render(anim|ANIM_NOSKIN, basetime, basetime2, pitch, axis, forward, d, a);
                 glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, fading ? GL_FALSE : GL_TRUE);
 
                 glDepthFunc(GL_LEQUAL);
@@ -958,7 +1069,7 @@ struct animmodel : model
             }
         }
 
-        render(anim, basetime, basetime2, pitch, vec(0, -1, 0), d, a, rdir, campos);
+        render(anim, basetime, basetime2, pitch, axis, forward, d, a);
 
         if(envmaptmu>=0)
         {
@@ -993,7 +1104,7 @@ struct animmodel : model
         parts.deletecontents();
     }
 
-    char *name() { return loadname; }
+    const char *name() const { return loadname; }
 
     void cleanup()
     {
@@ -1059,6 +1170,11 @@ struct animmodel : model
         loopv(parts) parts[i]->preloadshaders();
     }
 
+    void preloadmeshes()
+    {
+        loopv(parts) parts[i]->preloadmeshes();
+    }
+
     void setshader(Shader *shader)
     {
         if(parts.empty()) loaddefaultparts();
@@ -1092,10 +1208,16 @@ struct animmodel : model
         loopv(parts) loopvj(parts[i]->skins) parts[i]->skins[j].ambient = ambient;
     }
 
-    void setglow(float glow)
+    void setglow(float glow, float delta, float pulse)
     {
         if(parts.empty()) loaddefaultparts();
-        loopv(parts) loopvj(parts[i]->skins) parts[i]->skins[j].glow = glow;
+        loopv(parts) loopvj(parts[i]->skins) 
+        {
+            skin &s = parts[i]->skins[j];
+            s.glow = glow;
+            s.glowdelta = delta;
+            s.glowpulse = pulse;
+        }
     }
 
     void setglare(float specglare, float glowglare)
@@ -1148,7 +1270,7 @@ struct animmodel : model
     }
 
     static bool enabletc, enablemtc, enablealphatest, enablealphablend, enableenvmap, enableglow, enableoverbright, enablelighting, enablelight0, enablecullface, enablenormals, enabletangents, enablebones, enablerescale, enabledepthoffset;
-    static vec lightcolor;
+    static vec lightdir, lightcolor;
     static float transparent, lastalphatest;
     static void *lastvbuf, *lasttcbuf, *lastmtcbuf, *lastnbuf, *lastxbuf, *lastbbuf, *lastsdata, *lastbdata;
     static GLuint lastebuf, lastenvmaptex, closestenvmaptex;
@@ -1279,7 +1401,7 @@ struct animmodel : model
 bool animmodel::enabletc = false, animmodel::enablemtc = false, animmodel::enablealphatest = false, animmodel::enablealphablend = false,
      animmodel::enableenvmap = false, animmodel::enableglow = false, animmodel::enableoverbright = false, animmodel::enablelighting = false, animmodel::enablelight0 = false, animmodel::enablecullface = true,
      animmodel::enablenormals = false, animmodel::enabletangents = false, animmodel::enablebones = false, animmodel::enablerescale = false, animmodel::enabledepthoffset = false;
-vec animmodel::lightcolor;
+vec animmodel::lightdir(0, 0, 1), animmodel::lightcolor(1, 1, 1);
 float animmodel::transparent = 1, animmodel::lastalphatest = -1;
 void *animmodel::lastvbuf = NULL, *animmodel::lasttcbuf = NULL, *animmodel::lastmtcbuf = NULL, *animmodel::lastnbuf = NULL, *animmodel::lastxbuf = NULL, *animmodel::lastbbuf = NULL, *animmodel::lastsdata = NULL, *animmodel::lastbdata = NULL;
 GLuint animmodel::lastebuf = 0, animmodel::lastenvmaptex = 0, animmodel::closestenvmaptex = 0;
@@ -1287,4 +1409,171 @@ Texture *animmodel::lasttex = NULL, *animmodel::lastmasks = NULL, *animmodel::la
 int animmodel::envmaptmu = -1, animmodel::matrixpos = 0;
 glmatrixf animmodel::matrixstack[64];
 
+template<class MDL> struct modelloader
+{
+    static MDL *loading;
+    static string dir;
+
+    static bool animated() { return true; }
+    static bool multiparted() { return true; }
+    static bool multimeshed() { return true; } 
+};
+
+template<class MDL> MDL *modelloader<MDL>::loading = NULL;
+template<class MDL> string modelloader<MDL>::dir = {'\0'}; // crashes clang if "" is used here
+
+template<class MDL, class MESH> struct modelcommands
+{
+    typedef struct MDL::part part;
+    typedef struct MDL::skin skin;
+
+    static void setdir(char *name)
+    {
+        if(!MDL::loading) { conoutf("not loading an %s", MDL::formatname()); return; }
+        formatstring(MDL::dir)("packages/models/%s", name);
+    }
+
+    #define loopmeshes(meshname, m, body) \
+        if(!MDL::loading || MDL::loading->parts.empty()) { conoutf("not loading an %s", MDL::formatname()); return; } \
+        part &mdl = *MDL::loading->parts.last(); \
+        if(!mdl.meshes) return; \
+        loopv(mdl.meshes->meshes) \
+        { \
+            MESH &m = *(MESH *)mdl.meshes->meshes[i]; \
+            if(!strcmp(meshname, "*") || (m.name && !strcmp(m.name, meshname))) \
+            { \
+                body; \
+            } \
+        }
+
+    #define loopskins(meshname, s, body) loopmeshes(meshname, m, { skin &s = mdl.skins[i]; body; })
+    
+    static void setskin(char *meshname, char *tex, char *masks, float *envmapmax, float *envmapmin)
+    {
+        loopskins(meshname, s,
+            s.tex = textureload(makerelpath(MDL::dir, tex), 0, true, false);
+            if(*masks)
+            {
+                s.masks = textureload(makerelpath(MDL::dir, masks, "<stub>"), 0, true, false);
+                s.envmapmax = *envmapmax;
+                s.envmapmin = *envmapmin;
+            }
+        );
+    }
+    
+    static void setspec(char *meshname, int *percent)
+    {
+        float spec = 1.0f;
+        if(*percent>0) spec = *percent/100.0f;
+        else if(*percent<0) spec = 0.0f;
+        loopskins(meshname, s, s.spec = spec);
+    }
+    
+    static void setambient(char *meshname, int *percent)
+    {
+        float ambient = 0.3f;
+        if(*percent>0) ambient = *percent/100.0f;
+        else if(*percent<0) ambient = 0.0f;
+        loopskins(meshname, s, s.ambient = ambient);
+    }
+    
+    static void setglow(char *meshname, int *percent, int *delta, float *pulse)
+    {
+        float glow = 3.0f, glowdelta = *delta/100.0f, glowpulse = *pulse > 0 ? *pulse/1000.0f : 0;
+        if(*percent>0) glow = *percent/100.0f;
+        else if(*percent<0) glow = 0.0f;
+        glowdelta -= glow;
+        loopskins(meshname, s, { s.glow = glow; s.glowdelta = glowdelta; s.glowpulse = glowpulse; });
+    }
+    
+    static void setglare(char *meshname, float *specglare, float *glowglare)
+    {
+        loopskins(meshname, s, { s.specglare = *specglare; s.glowglare = *glowglare; });
+    }
+    
+    static void setalphatest(char *meshname, float *cutoff)
+    {
+        loopskins(meshname, s, s.alphatest = max(0.0f, min(1.0f, *cutoff)));
+    }
+    
+    static void setalphablend(char *meshname, int *blend)
+    {
+        loopskins(meshname, s, s.alphablend = *blend!=0);
+    }
+    
+    static void setcullface(char *meshname, int *cullface)
+    {
+        loopskins(meshname, s, s.cullface = *cullface!=0);
+    }
+    
+    static void setenvmap(char *meshname, char *envmap)
+    {
+        Texture *tex = cubemapload(envmap);
+        loopskins(meshname, s, s.envmap = tex);
+    }
+    
+    static void setbumpmap(char *meshname, char *normalmapfile, char *skinfile)
+    {
+        Texture *normalmaptex = NULL, *skintex = NULL;
+        normalmaptex = textureload(makerelpath(MDL::dir, normalmapfile, "<noff>"), 0, true, false);
+        if(skinfile[0]) skintex = textureload(makerelpath(MDL::dir, skinfile, "<noff>"), 0, true, false);
+        loopskins(meshname, s, { s.unlittex = skintex; s.normalmap = normalmaptex; m.calctangents(); });
+    }
+    
+    static void setfullbright(char *meshname, float *fullbright)
+    {
+        loopskins(meshname, s, s.fullbright = *fullbright);
+    }
+    
+    static void setshader(char *meshname, char *shader)
+    {
+        loopskins(meshname, s, s.shader = lookupshaderbyname(shader));
+    }
+    
+    static void setscroll(char *meshname, float *scrollu, float *scrollv)
+    {
+        loopskins(meshname, s, { s.scrollu = *scrollu; s.scrollv = *scrollv; });
+    }
+    
+    static void setnoclip(char *meshname, int *noclip)
+    {
+        loopmeshes(meshname, m, m.noclip = *noclip!=0);
+    }
+  
+    static void setlink(int *parent, int *child, char *tagname, float *x, float *y, float *z)
+    {
+        if(!MDL::loading) { conoutf("not loading an %s", MDL::formatname()); return; }
+        if(!MDL::loading->parts.inrange(*parent) || !MDL::loading->parts.inrange(*child)) { conoutf("no models loaded to link"); return; }
+        if(!MDL::loading->parts[*parent]->link(MDL::loading->parts[*child], tagname, vec(*x, *y, *z))) conoutf("could not link model %s", MDL::loading->loadname);
+    }
+ 
+    template<class F> void modelcommand(F *fun, const char *suffix, const char *args)
+    {
+        defformatstring(name)("%s%s", MDL::formatname(), suffix);
+        addcommand(newstring(name), (void (*)())fun, args);
+    }
+
+    modelcommands()
+    {
+        modelcommand(setdir, "dir", "s");
+        if(MDL::multimeshed())
+        {
+            modelcommand(setskin, "skin", "sssff");
+            modelcommand(setspec, "spec", "si");
+            modelcommand(setambient, "ambient", "si");
+            modelcommand(setglow, "glow", "siif");
+            modelcommand(setglare, "glare", "sff");
+            modelcommand(setalphatest, "alphatest", "sf");
+            modelcommand(setalphablend, "alphablend", "si");
+            modelcommand(setcullface, "cullface", "si");
+            modelcommand(setenvmap, "envmap", "ss");
+            modelcommand(setbumpmap, "bumpmap", "sss");
+            modelcommand(setfullbright, "fullbright", "sf");
+            modelcommand(setshader, "shader", "ss");
+            modelcommand(setscroll, "scroll", "sff");
+            modelcommand(setnoclip, "noclip", "si");
+        }
+        if(MDL::multiparted()) modelcommand(setlink, "link", "iisfff");
+    }
+};
 

@@ -48,121 +48,21 @@ struct vertmodel : animmodel
                 buildnorms(areaweight);
                 return;
             }
-            hashtable<vec, int> share;
-            int *next = new int[numverts];
-            memset(next, -1, numverts*sizeof(int));
-            loopi(numverts)
-            {
-                vert &v = verts[i];
-                v.norm = vec(0, 0, 0);
-                int idx = share.access(v.pos, i);
-                if(idx != i) { next[i] = next[idx]; next[idx] = i; }
-            }
-            loopi(numtris)
-            {
-                tri &t = tris[i];
-                vert &v1 = verts[t.vert[0]], &v2 = verts[t.vert[1]], &v3 = verts[t.vert[2]];
-                vec norm;
-                norm.cross(vec(v2.pos).sub(v1.pos), vec(v3.pos).sub(v1.pos));
-                if(!areaweight) norm.normalize();
-                v1.norm.add(norm);
-                v2.norm.add(norm);
-                v3.norm.add(norm);
-            }
-            vec *norms = new vec[numverts];
-            memset(norms, 0, numverts*sizeof(vec));
-            loopi(numverts)
-            {
-                vert &v = verts[i];
-                norms[i].add(v.norm);
-                if(next[i] >= 0)
-                {
-                    float vlimit = limit*v.norm.magnitude();
-                    for(int j = next[i]; j >= 0; j = next[j])
-                    {
-                        vert &o = verts[j];
-                        if(v.norm.dot(o.norm) >= vlimit*o.norm.magnitude())
-                        {
-                            norms[i].add(o.norm);
-                            norms[j].add(v.norm);
-                        }
-                    }
-                }
-            }
-            loopi(numverts) verts[i].norm = norms[i].normalize();
-            delete[] next;
-            delete[] norms;
+            mesh::smoothnorms(verts, numverts, tris, numtris, limit, areaweight);
         }
 
         void buildnorms(bool areaweight = true)
         {
             loopk(((vertmeshgroup *)group)->numframes)
-            {
-                vert *fverts = &verts[k*numverts];
-                loopi(numverts) fverts[i].norm = vec(0, 0, 0);
-                loopi(numtris)
-                {
-                    tri &t = tris[i];
-                    vert &v1 = fverts[t.vert[0]], &v2 = fverts[t.vert[1]], &v3 = fverts[t.vert[2]];
-                    vec norm;
-                    norm.cross(vec(v2.pos).sub(v1.pos), vec(v3.pos).sub(v1.pos));
-                    if(!areaweight) norm.normalize();
-                    v1.norm.add(norm);
-                    v2.norm.add(norm);
-                    v3.norm.add(norm);
-                }
-                loopi(numverts) fverts[i].norm.normalize();
-            }
+                mesh::buildnorms(&verts[k*numverts], numverts, tris, numtris, areaweight); 
         }
 
-        void calctangents()
+        void calctangents(bool areaweight = true)
         {
             if(bumpverts) return;
-            vec *tangent = new vec[2*numverts], *bitangent = tangent+numverts;
-            memset(tangent, 0, 2*numverts*sizeof(vec));
             bumpverts = new bumpvert[((vertmeshgroup *)group)->numframes*numverts];
             loopk(((vertmeshgroup *)group)->numframes)
-            {
-                vert *fverts = &verts[k*numverts];
-                loopi(numtris)
-                {
-                    const tri &t = tris[i];
-                    const tcvert &tc0 = tcverts[t.vert[0]],
-                                 &tc1 = tcverts[t.vert[1]],
-                                 &tc2 = tcverts[t.vert[2]];
- 
-                    vec v0(fverts[t.vert[0]].pos),
-                        e1(fverts[t.vert[1]].pos), 
-                        e2(fverts[t.vert[2]].pos);
-                    e1.sub(v0);
-                    e2.sub(v0);
- 
-                    float u1 = tc1.u - tc0.u, v1 = tc1.v - tc0.v, 
-                          u2 = tc2.u - tc0.u, v2 = tc2.v - tc0.v,
-                          scale = u1*v2 - u2*v1;
-                    if(scale!=0) scale = 1.0f / scale;
-                    vec u(e1), v(e2);
-                    u.mul(v2).sub(vec(e2).mul(v1)).mul(scale);
-                    v.mul(u1).sub(vec(e1).mul(u2)).mul(scale);
- 
-                    loopj(3)
-                    {
-                        tangent[t.vert[j]].add(u);
-                        bitangent[t.vert[j]].add(v);
-                    }
-                }
-                bumpvert *fbumpverts = &bumpverts[k*numverts];
-                loopi(numverts)
-                {
-                    const vec &n = fverts[i].norm,
-                              &t = tangent[i],
-                              &bt = bitangent[i];
-                    bumpvert &bv = fbumpverts[i];
-                    (bv.tangent = t).sub(vec(n).mul(n.dot(t))).normalize();
-                    bv.bitangent = vec().cross(n, t).dot(bt) < 0 ? -1 : 1;
-                }
-            }
-            delete[] tangent;
+                mesh::calctangents(&bumpverts[k*numverts], &verts[k*numverts], tcverts, numverts, tris, numtris, areaweight);
         }
 
         void calcbb(int frame, vec &bbmin, vec &bbmax, const matrix3x4 &m)
@@ -339,7 +239,7 @@ struct vertmodel : animmodel
 
         void render(const animstate *as, skin &s, vbocacheentry &vc)
         {
-            if(!(as->anim&ANIM_NOSKIN))
+            if(!(as->cur.anim&ANIM_NOSKIN))
             {
                 if(s.multitextured())
                 {
@@ -395,7 +295,7 @@ struct vertmodel : animmodel
             glde++;
             xtravertsva += numverts;
 
-            if(renderpath==R_FIXEDFUNCTION && !(as->anim&ANIM_NOSKIN) && (s.scrollu || s.scrollv))
+            if(renderpath==R_FIXEDFUNCTION && !(as->cur.anim&ANIM_NOSKIN) && (s.scrollu || s.scrollv))
             {
                 if(s.multitextured())
                 {
@@ -578,7 +478,7 @@ struct vertmodel : animmodel
                 glVertexPointer(3, GL_FLOAT, vertsize, &vverts->pos);
                 lastvbuf = hasVBO ? (void *)(size_t)vc.vbuf : vc.vdata;
             }
-            if(as->anim&ANIM_NOSKIN)
+            if(as->cur.anim&ANIM_NOSKIN)
             {
                 if(enabletc) disabletc();
                 if(enablenormals) disablenormals();
@@ -608,7 +508,7 @@ struct vertmodel : animmodel
                 if(lasttcbuf!=lastvbuf)
                 {
                     glTexCoordPointer(2, GL_FLOAT, vertsize, &vverts->u);
-                    lasttcbuf = lastnbuf;
+                    lasttcbuf = lastvbuf;
                 }
             }
             if(enablebones) disablebones();
@@ -627,9 +527,22 @@ struct vertmodel : animmodel
             else DELETEA(vdata);
         }
 
-        void render(const animstate *as, float pitch, const vec &axis, dynent *d, part *p)
+        void preload(part *p)
         {
-            if(as->anim&ANIM_NORENDER)
+            if(numframes > 1) return;
+            bool norms = false, tangents = false;
+            loopv(p->skins)
+            {
+                if(p->skins[i].normals()) norms = true;
+                if(p->skins[i].tangents()) tangents = true;
+            }
+            if(norms!=vnorms || tangents!=vtangents) cleanup();
+            if(hasVBO ? !vbocache->vbuf : !vbocache->vdata) genvbo(norms, tangents, *vbocache);
+        }
+
+        void render(const animstate *as, float pitch, const vec &axis, const vec &forward, dynent *d, part *p)
+        {
+            if(as->cur.anim&ANIM_NORENDER)
             {
                 loopv(p->links) calctagmatrix(p, p->links[i].tag, *as, p->links[i].matrix);
                 return;
@@ -689,6 +602,68 @@ struct vertmodel : animmodel
 
     vertmodel(const char *name) : animmodel(name)
     {
+    }
+};
+
+template<class MDL> struct vertloader : modelloader<MDL>
+{
+};
+
+template<class MDL> struct vertcommands : modelcommands<MDL, struct MDL::vertmesh>
+{
+    typedef struct MDL::part part;
+    typedef struct MDL::skin skin;
+
+    static void loadpart(char *model, float *smooth)
+    {
+        if(!MDL::loading) { conoutf("not loading an %s", MDL::formatname()); return; }
+        defformatstring(filename)("%s/%s", MDL::dir, model);
+        part &mdl = *new part;
+        MDL::loading->parts.add(&mdl);
+        mdl.model = MDL::loading;
+        mdl.index = MDL::loading->parts.length()-1;
+        if(mdl.index) mdl.pitchscale = mdl.pitchoffset = mdl.pitchmin = mdl.pitchmax = 0;
+        mdl.meshes = MDL::loading->sharemeshes(path(filename), double(*smooth > 0 ? cos(clamp(*smooth, 0.0f, 180.0f)*RAD) : 2));
+        if(!mdl.meshes) conoutf("could not load %s", filename);
+        else mdl.initskins();
+    }
+    
+    static void setpitch(float *pitchscale, float *pitchoffset, float *pitchmin, float *pitchmax)
+    {
+        if(!MDL::loading || MDL::loading->parts.empty()) { conoutf("not loading an %s", MDL::formatname()); return; }
+        part &mdl = *MDL::loading->parts.last();
+    
+        mdl.pitchscale = *pitchscale;
+        mdl.pitchoffset = *pitchoffset;
+        if(*pitchmin || *pitchmax)
+        {
+            mdl.pitchmin = *pitchmin;
+            mdl.pitchmax = *pitchmax;
+        }
+        else
+        {
+            mdl.pitchmin = -360*fabs(mdl.pitchscale) + mdl.pitchoffset;
+            mdl.pitchmax = 360*fabs(mdl.pitchscale) + mdl.pitchoffset;
+        }
+    }
+
+    static void setanim(char *anim, int *frame, int *range, float *speed, int *priority)
+    {
+        if(!MDL::loading || MDL::loading->parts.empty()) { conoutf("not loading an %s", MDL::formatname()); return; }
+        vector<int> anims;
+        findanims(anim, anims);
+        if(anims.empty()) conoutf("could not find animation %s", anim);
+        else loopv(anims)
+        {
+            MDL::loading->parts.last()->setanim(0, anims[i], *frame, *range, *speed, *priority);
+        }
+    }
+
+    vertcommands()
+    {
+        if(MDL::multiparted()) this->modelcommand(loadpart, "load", "sf"); 
+        this->modelcommand(setpitch, "pitch", "ffff");
+        if(MDL::animated()) this->modelcommand(setanim, "anim", "siiff");
     }
 };
 

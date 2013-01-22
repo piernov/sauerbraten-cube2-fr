@@ -9,7 +9,7 @@ SAUER_BIN=${SAUER_DATA}/bin_unix
 
 # SAUER_OPTIONS contains any command line options you would like to start Sauerbraten with.
 #SAUER_OPTIONS="-f"
-SAUER_OPTIONS="-q${HOME}/.sauerbraten -r"
+SAUER_OPTIONS="-q${HOME}/.sauerbraten"
 
 # SYSTEM_NAME should be set to the name of your operating system.
 #SYSTEM_NAME=Linux
@@ -32,7 +32,7 @@ case ${MACHINE_NAME} in
 i486|i586|i686)
   MACHINE_NAME=
   ;;
-x86_64)
+x86_64|amd64)
   MACHINE_NAME=64_
   ;;
 *)

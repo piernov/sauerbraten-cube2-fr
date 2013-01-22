@@ -27,18 +27,21 @@ static float cursorx = 0.5f, cursory = 0.5f;
 #define SKIN_H 128
 #define SKIN_SCALE 4
 #define INSERT (3*SKIN_SCALE)
+#define MAXCOLUMNS 16
 
 VARP(guiautotab, 6, 16, 40);
 VARP(guiclicktab, 0, 0, 1);
+VARP(guifadein, 0, 1, 1);
 
 struct gui : g3d_gui
 {
     struct list
     {
-        int parent, w, h, align;
+        int parent, w, h, springs, curspring, column;
     };
 
-    int nextlist;
+    int firstlist, nextlist;
+    int columns[MAXCOLUMNS];
 
     static vector<list> lists;
     static float hitx, hity;
@@ -47,7 +50,7 @@ struct gui : g3d_gui
 
     static void reset()
     {
-        lists.shrink(0);
+        lists.setsize(0);
     }
 
     static int ty, tx, tpos, *tcurrent, tcolor; //tracking tab size and position since uses different layout method...
@@ -105,12 +108,7 @@ struct gui : g3d_gui
         if(curdepth != 0) return;
         if(color) tcolor = color;
         tpos++; 
-        if(!name) 
-        {
-            static string title;
-            formatstring(title)("%d", tpos);
-            name = title;
-        }
+        if(!name) name = intstr(tpos); 
         int w = max(text_width(name) - 2*INSERT, 0);
         if(layoutpass) 
         {  
@@ -138,7 +136,7 @@ struct gui : g3d_gui
     bool ishorizontal() const { return curdepth&1; }
     bool isvertical() const { return !ishorizontal(); }
 
-    void pushlist(int align = -1)
+    void pushlist()
     {	
         if(layoutpass)
         {
@@ -149,26 +147,32 @@ struct gui : g3d_gui
             }
             list &l = lists.add();
             l.parent = curlist;
-            l.align = align;
+            l.springs = 0;
+            l.column = -1;
             curlist = lists.length()-1;
             xsize = ysize = 0;
         }
         else
         {
-            int xpad = xsize, ypad = ysize;
             curlist = nextlist++;
-            xsize = lists[curlist].w;
-            ysize = lists[curlist].h;
-            switch(align)
+            if(curlist >= lists.length()) // should never get here unless script code doesn't use same amount of lists in layout and render passes
             {
-            case 0:
-                if(ishorizontal()) cury += max(ypad - ysize, 0)/2;
-                else curx += max(xpad - xsize, 0)/2;
-                break;
-            case 1:
-                if(ishorizontal()) cury += max(ypad - ysize, 0);
-                else curx += max(xpad - xsize, 0);
-                break;
+                list &l = lists.add();
+                l.parent = curlist;
+                l.springs = 0;
+                l.column = -1;
+                l.w = l.h = 0;
+            }
+            list &l = lists[curlist];
+            l.curspring = 0;
+            if(l.springs > 0)
+            {
+                if(ishorizontal()) xsize = l.w; else ysize = l.h;
+            }
+            else
+            {
+                xsize = l.w;
+                ysize = l.h;
             }
         }
         curdepth++;	
@@ -176,32 +180,29 @@ struct gui : g3d_gui
 
     void poplist()
     {
+        if(!lists.inrange(curlist)) return;
         list &l = lists[curlist];
         if(layoutpass)
         {
             l.w = xsize;
             l.h = ysize;
+            if(l.column >= 0) columns[l.column] = max(columns[l.column], ishorizontal() ? ysize : xsize);
         }
         curlist = l.parent;
         curdepth--;
-        if(curlist>=0)
+        if(lists.inrange(curlist))
         {   
-            xsize = lists[curlist].w;
-            ysize = lists[curlist].h;
-            if(ishorizontal()) cury -= l.h;
-            else curx -= l.w;
-            layout(l.w, l.h);
-            if(!layoutpass) switch(l.align)
+            int w = xsize, h = ysize;
+            if(ishorizontal()) cury -= h; else curx -= w;
+            list &p = lists[curlist];
+            xsize = p.w;
+            ysize = p.h;
+            if(!layoutpass && p.springs > 0)
             {
-            case 0:
-                if(ishorizontal()) cury -= max(ysize - l.h, 0)/2;         
-                else curx -= max(xsize - l.w, 0)/2;
-                break;
-            case 1:
-                if(ishorizontal()) cury -= max(ysize - l.h, 0);
-                else curx -= max(xsize - l.h, 0);
-                break;
-            }
+                list &s = lists[p.parent];
+                if(ishorizontal()) xsize = s.w; else ysize = s.h;
+            } 
+            layout(w, h);
         }
     }
 
@@ -209,13 +210,40 @@ struct gui : g3d_gui
     int button(const char *text, int color, const char *icon) { autotab(); return button_(text, color, icon, true, false); }
     int title (const char *text, int color, const char *icon) { autotab(); return button_(text, color, icon, false, true); }
 
-    void separator() { autotab(); line_(5); }
-    void progress(float percent) { autotab(); line_(FONTH*2/5, percent); }
+    void separator() { autotab(); line_(FONTH/3); }
+    void progress(float percent) { autotab(); line_((FONTH*4)/5, percent); }
 
     //use to set min size (useful when you have progress bars)
     void strut(float size) { layout(isvertical() ? int(size*FONTW) : 0, isvertical() ? 0 : int(size*FONTH)); }
     //add space between list items
     void space(float size) { layout(isvertical() ? 0 : int(size*FONTW), isvertical() ? int(size*FONTH) : 0); }
+
+    void spring(int weight) 
+    { 
+        if(curlist < 0) return;
+        list &l = lists[curlist];
+        if(layoutpass) { if(l.parent >= 0) l.springs += weight; return; }
+        int nextspring = min(l.curspring + weight, l.springs);
+        if(nextspring <= l.curspring) return;
+        if(ishorizontal())
+        {
+            int w = xsize - l.w;
+            layout((w*nextspring)/l.springs - (w*l.curspring)/l.springs, 0);
+        }
+        else
+        {
+            int h = ysize - l.h;
+            layout(0, (h*nextspring)/l.springs - (h*l.curspring)/l.springs);
+        }
+        l.curspring = nextspring;
+    }
+
+    void column(int col)
+    {
+        if(curlist < 0 || !layoutpass || col < 0 || col >= MAXCOLUMNS) return;
+        list &l = lists[curlist];
+        l.column = col;
+    }
 
     int layout(int w, int h)
     {
@@ -270,20 +298,133 @@ struct gui : g3d_gui
         return layout(size+SHADOW, size+SHADOW);
     }
 
-    void slider(int &val, int vmin, int vmax, int color, char *label)
+    int playerpreview(int model, int team, int weap, float sizescale, bool overlaid)
+    {
+        autotab();
+        if(sizescale==0) sizescale = 1;
+        int size = (int)(sizescale*2*FONTH)-SHADOW;
+        if(visible())
+        {
+            bool hit = ishit(size+SHADOW, size+SHADOW);
+            float xs = size, ys = size, xi = curx, yi = cury;
+            if(overlaid && hit && actionon)
+            {
+                glDisable(GL_TEXTURE_2D);
+                notextureshader->set();
+                glColor4f(0, 0, 0, 0.75f);
+                rect_(xi+SHADOW, yi+SHADOW, xs, ys, -1);
+                glEnable(GL_TEXTURE_2D);
+                defaultshader->set();
+            }
+            int x1 = int(floor(screen->w*(xi*scale.x+origin.x))), y1 = int(floor(screen->h*(1 - ((yi+ys)*scale.y+origin.y)))),
+                x2 = int(ceil(screen->w*((xi+xs)*scale.x+origin.x))), y2 = int(ceil(screen->h*(1 - (yi*scale.y+origin.y))));
+            glViewport(x1, y1, x2-x1, y2-y1);
+            glScissor(x1, y1, x2-x1, y2-y1);
+            glEnable(GL_SCISSOR_TEST);
+            glDisable(GL_BLEND);
+            modelpreview::start(overlaid);
+            game::renderplayerpreview(model, team, weap);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_BLEND);
+            modelpreview::end();
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, screen->w, screen->h);
+            if(overlaid)
+            {
+                if(hit)
+                {
+                    glDisable(GL_TEXTURE_2D);
+                    notextureshader->set();
+                    glBlendFunc(GL_ZERO, GL_SRC_COLOR);
+                    glColor3f(1, 0.5f, 0.5f);
+                    rect_(xi, yi, xs, ys, -1);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glEnable(GL_TEXTURE_2D);
+                    defaultshader->set();
+                }
+                if(!overlaytex) overlaytex = textureload("data/guioverlay.png", 3);
+                glColor3fv(light.v);
+                glBindTexture(GL_TEXTURE_2D, overlaytex->id);
+                rect_(xi, yi, xs, ys, 0);
+            }
+        }
+        return layout(size+SHADOW, size+SHADOW);
+    }
+
+    int modelpreview(const char *name, int anim, float sizescale, bool overlaid)
+    {
+        autotab();
+        if(sizescale==0) sizescale = 1;
+        int size = (int)(sizescale*2*FONTH)-SHADOW;
+        if(visible())
+        {
+            bool hit = ishit(size+SHADOW, size+SHADOW);
+            float xs = size, ys = size, xi = curx, yi = cury;
+            if(overlaid && hit && actionon)
+            {
+                glDisable(GL_TEXTURE_2D);
+                notextureshader->set();
+                glColor4f(0, 0, 0, 0.75f);
+                rect_(xi+SHADOW, yi+SHADOW, xs, ys, -1);
+                glEnable(GL_TEXTURE_2D);
+                defaultshader->set();
+            }
+            int x1 = int(floor(screen->w*(xi*scale.x+origin.x))), y1 = int(floor(screen->h*(1 - ((yi+ys)*scale.y+origin.y)))),
+                x2 = int(ceil(screen->w*((xi+xs)*scale.x+origin.x))), y2 = int(ceil(screen->h*(1 - (yi*scale.y+origin.y))));
+            glViewport(x1, y1, x2-x1, y2-y1);
+            glScissor(x1, y1, x2-x1, y2-y1);
+            glEnable(GL_SCISSOR_TEST);
+            glDisable(GL_BLEND);
+            modelpreview::start(overlaid);
+            model *m = loadmodel(name);
+            if(m)
+            {
+                entitylight light;
+                light.color = vec(1, 1, 1);
+                light.dir = vec(0, -1, 2).normalize();
+                vec center, radius;
+                m->boundbox(0, center, radius);
+                float dist =  2.0f*max(radius.magnitude2(), 1.1f*radius.z),
+                      yaw = fmod(lastmillis/10000.0f*360.0f, 360.0f);
+                vec o(-center.x, dist - center.y, -0.1f*dist - center.z);
+                rendermodel(&light, name, anim, o, yaw, 0, 0, NULL, NULL, 0);
+            }
+            modelpreview::end();
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_BLEND);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, screen->w, screen->h);
+            if(overlaid)
+            {
+                if(hit)
+                {
+                    glDisable(GL_TEXTURE_2D);
+                    notextureshader->set();
+                    glBlendFunc(GL_ZERO, GL_SRC_COLOR);
+                    glColor3f(1, 0.5f, 0.5f);
+                    rect_(xi, yi, xs, ys, -1);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glEnable(GL_TEXTURE_2D);
+                    defaultshader->set();
+                }
+                if(!overlaytex) overlaytex = textureload("data/guioverlay.png", 3);
+                glColor3fv(light.v);
+                glBindTexture(GL_TEXTURE_2D, overlaytex->id);
+                rect_(xi, yi, xs, ys, 0);
+            }
+        }
+        return layout(size+SHADOW, size+SHADOW);
+    }
+
+    void slider(int &val, int vmin, int vmax, int color, const char *label)
     {
         autotab();
         int x = curx;
         int y = cury;
-        line_(10);
+        line_((FONTH*2)/3);
         if(visible())
         {
-            if(!label)
-            {
-                static string s;
-                formatstring(s)("%d", val);
-                label = s;
-            }
+            if(!label) label = intstr(val);
             int w = text_width(label);
 
             bool hit;
@@ -302,12 +443,12 @@ struct gui : g3d_gui
             }
 
             if(hit) color = 0xFF0000;
-            text_(label, px, py, color, hit && actionon);
+            text_(label, px, py, color, hit && actionon, hit);
             if(hit && actionon)
             {
                 int vnew = (vmin < vmax ? 1 : -1)+vmax-vmin;
-                if(ishorizontal()) vnew = int(vnew*(y+ysize-FONTH/2-hity)/(ysize-FONTH));
-                else vnew = int(vnew*(hitx-x-FONTH/2)/(xsize-w));
+                if(ishorizontal()) vnew = int((vnew*(y+ysize-FONTH/2-hity))/(ysize-FONTH));
+                else vnew = int((vnew*(hitx-x-FONTH/2))/(xsize-w));
                 vnew += vmin;
                 vnew = vmin < vmax ? clamp(vnew, vmin, vmax) : clamp(vnew, vmax, vmin);
                 if(vnew != val) val = vnew;
@@ -382,17 +523,19 @@ struct gui : g3d_gui
             
             lineshader->set();
             glDisable(GL_TEXTURE_2D);
+            glDisable(GL_BLEND);
             if(editing) glColor3f(1, 0, 0);
             else glColor3ub(color>>16, (color>>8)&0xFF, color&0xFF);
             rect_(curx, cury, w, h, -1, true);
             glEnable(GL_TEXTURE_2D);
+            glEnable(GL_BLEND);
             defaultshader->set();
         }
         layout(w, h);
         
         if(e->maxy != 1)
         {
-            int slines = e->lines.length()-e->pixelheight/FONTH;
+            int slines = e->limitscrolly();
             if(slines > 0) 
             {
                 int pos = e->scrolly;
@@ -430,10 +573,10 @@ struct gui : g3d_gui
         
     }
 
-    void text_(const char *text, int x, int y, int color, bool shadow) 
+    void text_(const char *text, int x, int y, int color, bool shadow, bool force = false) 
     {
-        if(shadow) draw_text(text, x+SHADOW, y+SHADOW, 0x00, 0x00, 0x00, 0xC0);
-        draw_text(text, x, y, color>>16, (color>>8)&0xFF, color&0xFF);
+        if(shadow) draw_text(text, x+SHADOW, y+SHADOW, 0x00, 0x00, 0x00, -0xC0);
+        draw_text(text, x, y, color>>16, (color>>8)&0xFF, color&0xFF, force ? -0xFF : 0xFF);
     }
 
     void background(int color, int inheritw, int inherith)
@@ -445,23 +588,19 @@ struct gui : g3d_gui
         int w = xsize, h = ysize;
         if(inheritw>0) 
         {
-            int parentw = curlist;
-            while(inheritw>0 && lists[parentw].parent>=0)
-            {
+            int parentw = curlist, parentdepth = 0;
+            for(;parentdepth < inheritw && lists[parentw].parent>=0; parentdepth++)
                 parentw = lists[parentw].parent;
-                inheritw--;
-            }
-            w = lists[parentw].w;
+            list &p = lists[parentw];
+            w = p.springs > 0 && (curdepth-parentdepth)&1 ? lists[p.parent].w : p.w;
         }
         if(inherith>0)
         {
-            int parenth = curlist;
-            while(inherith>0 && lists[parenth].parent>=0)
-            {
+            int parenth = curlist, parentdepth = 0;
+            for(;parentdepth < inherith && lists[parenth].parent>=0; parentdepth++)
                 parenth = lists[parenth].parent;
-                inherith--;
-            }
-            h = lists[parenth].h;
+            list &p = lists[parenth];
+            h = p.springs > 0 && !((curdepth-parentdepth)&1) ? lists[p.parent].h : p.h;
         }
         rect_(curx, cury, w, h);
         glEnable(GL_TEXTURE_2D);
@@ -474,25 +613,15 @@ struct gui : g3d_gui
         float xs = t->xs*scale, ys = t->ys*scale;
         x += int((size-xs)/2);
         y += int((size-ys)/2);
-        if(hit && actionon)
-        {
-            glDisable(GL_TEXTURE_2D);
-            notextureshader->set();
-            glColor4f(0, 0, 0, 0.75f);
-            rect_(x+SHADOW, y+SHADOW, xs, ys);
-            glEnable(GL_TEXTURE_2D);
-            defaultshader->set();
-        }
-        static const float tc[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
         const vec &color = hit ? vec(1, 0.5f, 0.5f) : (overlaid ? vec(1, 1, 1) : light);
         glBindTexture(GL_TEXTURE_2D, t->id);
+        if(hit && actionon)
+        {
+            glColor4f(0, 0, 0, 0.75f);
+            rect_(x+SHADOW, y+SHADOW, xs, ys, 0);
+        }
         glColor3fv(color.v);
-        glBegin(GL_TRIANGLE_STRIP);
-        glTexCoord2fv(tc[0]); glVertex2f(x,    y);
-        glTexCoord2fv(tc[1]); glVertex2f(x+xs, y);
-        glTexCoord2fv(tc[3]); glVertex2f(x,    y+ys);
-        glTexCoord2fv(tc[2]); glVertex2f(x+xs, y+ys);
-        glEnd();
+        rect_(x, y, xs, ys, 0);
 
         if(overlaid)
         {
@@ -533,9 +662,7 @@ struct gui : g3d_gui
             glEnable(GL_TEXTURE_2D);
             defaultshader->set();	
         }
-        static Shader *rgbonlyshader = NULL;
-        if(!rgbonlyshader) rgbonlyshader = lookupshaderbyname("rgbonly");
-        rgbonlyshader->set();
+        SETSHADER(rgbonly);
         const vec &color = hit ? vec(1, 0.5f, 0.5f) : (overlaid ? vec(1, 1, 1) : light);
         float tc[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
         int xoff = vslot.xoffset, yoff = vslot.yoffset;
@@ -596,21 +723,20 @@ struct gui : g3d_gui
         if(visible())
         {
             if(!slidertex) slidertex = textureload("data/guislider.png", 3);
-            glEnable(GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, slidertex->id);
             if(percent < 0.99f) 
             {
                 glColor4f(light.x, light.y, light.z, 0.375f);
                 if(ishorizontal()) 
-                    rect_(curx + FONTH/2 - size, cury, size*2, ysize, 0);
+                    rect_(curx + FONTH/2 - size/2, cury, size, ysize, 0);
                 else
-                    rect_(curx, cury + FONTH/2 - size, xsize, size*2, 1);
+                    rect_(curx, cury + FONTH/2 - size/2, xsize, size, 1);
             }
             glColor3fv(light.v);
             if(ishorizontal()) 
-                rect_(curx + FONTH/2 - size, cury + ysize*(1-percent), size*2, ysize*percent, 0);
+                rect_(curx + FONTH/2 - size/2, cury + ysize*(1-percent), size, ysize*percent, 0);
             else 
-                rect_(curx, cury + FONTH/2 - size, xsize*percent, size*2, 1);
+                rect_(curx, cury + FONTH/2 - size/2, xsize*percent, size, 1);
         }
         layout(ishorizontal() ? FONTH : 0, ishorizontal() ? 0 : FONTH);
     }
@@ -643,7 +769,7 @@ struct gui : g3d_gui
         
             if(icon)
             {
-                if(!isspace(icon[0]))
+                if(icon[0] != ' ')
                 {
                     const char *ext = strrchr(icon, '.');
                     defformatstring(tname)("packages/icons/%s%s", icon, ext ? "" : ".jpg");
@@ -652,7 +778,7 @@ struct gui : g3d_gui
                 x += ICON_SIZE;
             }
             if(icon && text) x += padding;
-            if(text) text_(text, x, cury, color, center || (hit && clickable && actionon));
+            if(text) text_(text, x, cury, color, center || (hit && clickable && actionon), hit && clickable);
         }
         return layout(w, FONTH);
     }
@@ -757,7 +883,7 @@ struct gui : g3d_gui
         if(tcurrent) h += ((skiny[5]-skiny[1])-(skiny[3]-skiny[2]))*SKIN_SCALE + FONTH-2*INSERT;
         else h += (skiny[6]-skiny[3])*SKIN_SCALE;
 
-        float aspect = float(screen->h)/float(screen->w), fit = 1.0f;
+        float aspect = forceaspect ? 1.0f/forceaspect : float(screen->h)/float(screen->w), fit = 1.0f;
         if(w*aspect*basescale>1.0f) fit = 1.0f/(w*aspect*basescale);
         if(h*basescale*fit>maxscale) fit *= maxscale/(h*basescale*fit);
         origin = vec(0.5f-((w-xsize)/2 - (skinx[2]-skinx[1])*SKIN_SCALE)*aspect*scale.x*fit, 0.5f + (0.5f*h-(skiny[9]-skiny[7])*SKIN_SCALE)*scale.y*fit, 0);
@@ -772,7 +898,7 @@ struct gui : g3d_gui
             if(allowinput) hascursor = true;
         }
         basescale = initscale;
-        if(layoutpass) scale.x = scale.y = scale.z = min(basescale*(totalmillis-starttime)/300.0f, basescale);
+        if(layoutpass) scale.x = scale.y = scale.z = guifadein ? basescale*min((totalmillis-starttime)/300.0f, 1.0f) : basescale;
         alpha = allowinput ? 0.80f : 0.60f;
         passthrough = scale.x<basescale || !allowinput;
         curdepth = -1;
@@ -783,7 +909,11 @@ struct gui : g3d_gui
         tcurrent = tab;
         tcolor = 0xFFFFFF;
         pushlist();
-        if(layoutpass) nextlist = curlist;
+        if(layoutpass) 
+        {
+            firstlist = nextlist = curlist;
+            memset(columns, 0, sizeof(columns));
+        }
         else
         {
             if(tcurrent && !*tcurrent) tcurrent = NULL;
@@ -816,10 +946,58 @@ struct gui : g3d_gui
         }
     }
 
+    void adjusthorizontalcolumn(int col, int i)
+    {
+        int h = columns[col], dh = 0;
+        for(int d = 1; i >= 0; d ^= 1)
+        {
+            list &p = lists[i];
+            if(d&1) { dh = h - p.h; if(dh <= 0) break; p.h = h; }
+            else { p.h += dh; h = p.h; }
+            i = p.parent;
+        }
+        ysize += max(dh, 0);
+    }
+
+    void adjustverticalcolumn(int col, int i)
+    {
+        int w = columns[col], dw = 0;
+        for(int d = 0; i >= 0; d ^= 1)
+        {
+            list &p = lists[i];
+            if(d&1) { p.w += dw; w = p.w; }
+            else { dw = w - p.w; if(dw <= 0) break; p.w = w; }
+            i = p.parent;
+        }
+        xsize = max(xsize, w);
+    }
+        
+    void adjustcolumns()
+    {
+        if(lists.inrange(curlist))
+        {
+            list &l = lists[curlist];
+            if(l.column >= 0) columns[l.column] = max(columns[l.column], ishorizontal() ? ysize : xsize);
+        }
+        int parent = -1, depth = 0;
+        for(int i = firstlist; i < lists.length(); i++)
+        {
+            list &l = lists[i];
+            if(l.parent > parent) { parent = l.parent; depth++; }
+            else if(l.parent < parent) { parent = l.parent; depth--; }
+            if(l.column >= 0)
+            {
+                if(depth&1) adjusthorizontalcolumn(l.column, i); 
+                else adjustverticalcolumn(l.column, i);
+            }
+        }
+    }
+
     void end()
     {
         if(layoutpass)
         {	
+            adjustcolumns();
             xsize = max(tx, xsize);
             ysize = max(ty, ysize);
             ysize = max(ysize, (skiny[7]-skiny[6])*SKIN_SCALE);
@@ -859,6 +1037,11 @@ struct gui : g3d_gui
             glPopMatrix();
         }
         poplist();
+    }
+
+    void draw()
+    {
+        cb->gui(*this, layoutpass);
     }
 };
 
@@ -1010,6 +1193,7 @@ bool menukey(int code, bool isdown, int cooked)
             break;
         default:
             if(!cooked || (code<32)) return false;
+            break;
     }
     if(!isdown) return true;
     e->key(code, cooked);
@@ -1058,7 +1242,7 @@ void g3d_limitscale(float scale)
     gui::maxscale = scale;
 }
 
-int g3d_sort(gui *a, gui *b) { return (int)(a->dist>b->dist)*2-1; }
+static inline bool g3d_sort(const gui &a, const gui &b) { return a.dist < b.dist; }
 
 bool g3d_windowhit(bool on, bool act)
 {
@@ -1078,8 +1262,8 @@ void g3d_render()
 {
     windowhit = NULL;    
     if(actionon) mousebuttons |= G3D_PRESSED;
-    
-    gui::reset();
+   
+    gui::reset(); 
     guis2d.shrink(0);
     guis3d.shrink(0);
  
@@ -1100,8 +1284,8 @@ void g3d_render()
     hascursor = false;
 
     layoutpass = true;
-    loopv(guis2d) guis2d[i].cb->gui(guis2d[i], true);
-    loopv(guis3d) guis3d[i].cb->gui(guis3d[i], true);
+    loopv(guis2d) guis2d[i].draw();
+    loopv(guis3d) guis3d[i].draw();
     layoutpass = false;
 
     if(guis2d.length() || guis3d.length())
@@ -1116,7 +1300,7 @@ void g3d_render()
         glDepthFunc(GL_ALWAYS);
         glDepthMask(GL_FALSE);
 
-        loopvrev(guis3d) guis3d[i].cb->gui(guis3d[i], false);
+        loopvrev(guis3d) guis3d[i].draw();
 
         glDepthFunc(GL_LESS);
         glDepthMask(GL_TRUE);
@@ -1134,7 +1318,7 @@ void g3d_render()
         glPushMatrix();
         glLoadIdentity();
 
-        loopvrev(guis2d) guis2d[i].cb->gui(guis2d[i], false);
+        loopvrev(guis2d) guis2d[i].draw();
 
         glMatrixMode(GL_PROJECTION);
         glPopMatrix();

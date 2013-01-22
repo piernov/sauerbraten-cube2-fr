@@ -1,0 +1,311 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{ae563c98-3789-434c-97ee-205570e0967d}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;rc;def;r;odl;idl;hpj;bat</Extensions>
+    </Filter>
+    <Filter Include="Engine\world">
+      <UniqueIdentifier>{4ecf0362-5428-4f2c-89f0-59530c6aff68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\cs">
+      <UniqueIdentifier>{b590fa06-1256-4544-a8c0-ec065c77f1b6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\render">
+      <UniqueIdentifier>{1cf4093e-158a-4cda-89ac-7e4cbbbc2e2d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\system">
+      <UniqueIdentifier>{e7f09ac3-7e3a-4585-9f34-381c8d51642a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{a552bd5c-6f3f-4539-8074-ef3f1a017b5d}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl</Extensions>
+    </Filter>
+    <Filter Include="Common\text">
+      <UniqueIdentifier>{884795ee-e315-4bcc-b0ba-147632d9059b}</UniqueIdentifier>
+      <Extensions>ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe</Extensions>
+    </Filter>
+    <Filter Include="Common\text\docs">
+      <UniqueIdentifier>{334246b2-4c61-4d99-a23c-9094e0fc40d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\text\cfg">
+      <UniqueIdentifier>{ab69d34f-74f4-496b-af74-8e3302d57d85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RPG">
+      <UniqueIdentifier>{4a70874e-ca1e-4f98-9b7c-5032d51cdcf5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\engine\engine.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\lightmap.h">
+      <Filter>Engine\world</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\mpr.h">
+      <Filter>Engine\world</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\octa.h">
+      <Filter>Engine\world</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\world.h">
+      <Filter>Engine\world</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\animmodel.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\bih.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\depthfx.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\explosion.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\iqm.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\lensflare.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\lightning.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\md2.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\md3.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\md5.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\model.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\obj.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\ragdoll.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\rendertarget.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\scale.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\skelmodel.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\smd.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\textedit.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\texture.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\varray.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\vertmodel.h">
+      <Filter>Engine\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\command.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\cube.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\ents.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\geom.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\iengine.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\igame.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\tools.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="rpg.h">
+      <Filter>RPG</Filter>
+    </ClInclude>
+    <ClInclude Include="rpgent.h">
+      <Filter>RPG</Filter>
+    </ClInclude>
+    <ClInclude Include="rpgobj.h">
+      <Filter>RPG</Filter>
+    </ClInclude>
+    <ClInclude Include="stats.h">
+      <Filter>RPG</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\engine\pch.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\blend.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\cubeloader.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\lightmap.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\normal.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\octa.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\octaedit.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\octarender.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\physics.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\pvs.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\world.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\worldio.cpp">
+      <Filter>Engine\world</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\client.cpp">
+      <Filter>Engine\cs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\server.cpp">
+      <Filter>Engine\cs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\serverbrowser.cpp">
+      <Filter>Engine\cs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\3dgui.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\bih.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\blob.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\decal.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\dynlight.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\glare.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\grass.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\material.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\rendergl.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\rendermodel.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\renderparticles.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\rendersky.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\rendertext.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\renderva.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\shader.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\shadowmap.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\texture.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\water.cpp">
+      <Filter>Engine\render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\command.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\console.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\main.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\menus.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\movie.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\sound.cpp">
+      <Filter>Engine\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\crypto.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\geom.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\pch.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\stream.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\tools.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\zip.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="ent.cpp">
+      <Filter>RPG</Filter>
+    </ClCompile>
+    <ClCompile Include="entities.cpp">
+      <Filter>RPG</Filter>
+    </ClCompile>
+    <ClCompile Include="objset.cpp">
+      <Filter>RPG</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>RPG</Filter>
+    </ClCompile>
+    <ClCompile Include="rpg.cpp">
+      <Filter>RPG</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="sauerbraten.rc">
+      <Filter>Engine</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

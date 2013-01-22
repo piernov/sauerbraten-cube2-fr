@@ -346,7 +346,7 @@ struct cubeloader
                     if(type<0 || type>=C_MAXTYPE)
                     {
                         defformatstring(t)("%d @ %d", type, k);
-                        fatal("while reading map: type out of range: ", t);
+                        fatal("while reading map: type out of range: %s", t);
                     }
                     s->type = type;
                     s->floor = f->getchar();
@@ -368,15 +368,16 @@ struct cubeloader
 
         string cfgname;
         formatstring(cfgname)("packages/cube/%s.cfg", mname);
-        overrideidents = true;
+        identflags |= IDF_OVERRIDDEN;
         execfile("packages/cube/package.cfg");
         execfile(path(cfgname));
-        overrideidents = false;
+        identflags &= ~IDF_OVERRIDDEN;
         create_cubes();
         mpremip(true);
         clearlights();
         allchanged();
-        loopv(entities::getents()) if(entities::getents()[i]->type!=ET_LIGHT) dropenttofloor(entities::getents()[i]);
+        vector<extentity *> &ents = entities::getents();
+        loopv(ents) if(ents[i]->type!=ET_LIGHT) dropenttofloor(ents[i]);
         entitiesinoctanodes();
         conoutf("read cube map %s (%.1f seconds)", cgzname, (SDL_GetTicks()-loadingstart)/1000.0f);
         startmap(NULL);

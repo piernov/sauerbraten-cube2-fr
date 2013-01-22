@@ -4,19 +4,107 @@ namespace game
 {
     VARP(minradarscale, 0, 384, 10000);
     VARP(maxradarscale, 1, 1024, 10000);
+    VARP(radarteammates, 0, 1, 1);
     FVARP(minimapalpha, 0, 1, 1);
 
+    float calcradarscale()
+    {
+        return clamp(max(minimapradius.x, minimapradius.y)/3, float(minradarscale), float(maxradarscale));
+    }
+
+    void drawminimap(fpsent *d, float x, float y, float s)
+    {
+        vec pos = vec(d->o).sub(minimapcenter).mul(minimapscale).add(0.5f), dir;
+        vecfromyawpitch(camera1->yaw, 0, 1, 0, dir);
+        float scale = calcradarscale();
+        glBegin(GL_TRIANGLE_FAN);
+        loopi(16)
+        {
+            vec tc = vec(dir).rotate_around_z(i/16.0f*2*M_PI);
+            glTexCoord2f(pos.x + tc.x*scale*minimapscale.x, pos.y + tc.y*scale*minimapscale.y);
+            vec v = vec(0, -1, 0).rotate_around_z(i/16.0f*2*M_PI);
+            glVertex2f(x + 0.5f*s*(1.0f + v.x), y + 0.5f*s*(1.0f + v.y));
+        }
+        glEnd();
+    }
+
+    void drawradar(float x, float y, float s)
+    {
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(x,   y);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(x+s, y);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(x,   y+s);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(x+s, y+s);
+        glEnd();
+    }
+
+    void drawteammate(fpsent *d, float x, float y, float s, fpsent *o, float scale)
+    {
+        vec dir = d->o;
+        dir.sub(o->o).div(scale);
+        float dist = dir.magnitude2(), maxdist = 1 - 0.05f - 0.05f;
+        if(dist >= maxdist) dir.mul(maxdist/dist);
+        dir.rotate_around_z(-camera1->yaw*RAD);
+        float bs = 0.06f*s,
+              bx = x + s*0.5f*(1.0f + dir.x),
+              by = y + s*0.5f*(1.0f + dir.y);
+        vec v(-0.5f, -0.5f, 0);
+        v.rotate_around_z((90+o->yaw-camera1->yaw)*RAD);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(bx + bs*v.x, by + bs*v.y);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(bx + bs*v.y, by - bs*v.x);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(bx - bs*v.x, by - bs*v.y);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(bx - bs*v.y, by + bs*v.x);
+    }
+
+    void drawteammates(fpsent *d, float x, float y, float s)
+    {
+        if(!radarteammates) return;
+        float scale = calcradarscale();
+        int alive = 0, dead = 0;
+        loopv(players) 
+        {
+            fpsent *o = players[i];
+            if(o != d && o->state == CS_ALIVE && isteam(o->team, d->team))
+            {
+                if(!alive++) 
+                {
+                    settexture(isteam(d->team, player1->team) ? "packages/hud/blip_blue_alive.png" : "packages/hud/blip_red_alive.png");
+                    glBegin(GL_QUADS);
+                }
+                drawteammate(d, x, y, s, o, scale);
+            }
+        }
+        if(alive) glEnd();
+        loopv(players) 
+        {
+            fpsent *o = players[i];
+            if(o != d && o->state == CS_DEAD && isteam(o->team, d->team))
+            {
+                if(!dead++) 
+                {
+                    settexture(isteam(d->team, player1->team) ? "packages/hud/blip_blue_dead.png" : "packages/hud/blip_red_dead.png");
+                    glBegin(GL_QUADS);
+                }
+                drawteammate(d, x, y, s, o, scale);
+            }
+        }
+        if(dead) glEnd();
+    }
+        
     #include "capture.h"
     #include "ctf.h"
+    #include "collect.h"
 
     clientmode *cmode = NULL;
     captureclientmode capturemode;
     ctfclientmode ctfmode;
+    collectclientmode collectmode;
 
     void setclientmode()
     {
         if(m_capture) cmode = &capturemode;
         else if(m_ctf) cmode = &ctfmode;
+        else if(m_collect) cmode = &collectmode;
         else cmode = NULL;
     }
 
@@ -24,8 +112,8 @@ namespace game
     int lastping = 0;
 
     bool connected = false, remote = false, demoplayback = false, gamepaused = false;
-    int sessionid = 0, mastermode = MM_OPEN;
-    string servinfo = "", connectpass = "";
+    int sessionid = 0, mastermode = MM_OPEN, gamespeed = 100;
+    string servinfo = "", servauth = "", connectpass = "";
 
     VARP(deadpush, 1, 2, 20);
 
@@ -80,9 +168,9 @@ namespace game
     };
     vector<authkey *> authkeys;
 
-    authkey *findauthkey(const char *desc)
+    authkey *findauthkey(const char *desc = "")
     {
-        loopv(authkeys) if(!strcmp(authkeys[i]->desc, desc) && !strcmp(authkeys[i]->name, player1->name)) return authkeys[i];
+        loopv(authkeys) if(!strcmp(authkeys[i]->desc, desc) && !strcasecmp(authkeys[i]->name, player1->name)) return authkeys[i];
         loopv(authkeys) if(!strcmp(authkeys[i]->desc, desc)) return authkeys[i];
         return NULL;
     }
@@ -122,7 +210,7 @@ namespace game
         loopv(authkeys)
         {
             authkey *a = authkeys[i];
-            f->printf("authkey \"%s\" \"%s\" \"%s\"\n", a->name, a->key, a->desc);
+            f->printf("authkey %s %s %s\n", escapestring(a->name), escapestring(a->key), escapestring(a->desc));
         }
         conoutf("saved authkeys to auth.cfg");
         delete f;
@@ -131,17 +219,19 @@ namespace game
 
     void sendmapinfo()
     {
+        if(!connected) return;
         sendcrc = true;
         if(player1->state!=CS_SPECTATOR || player1->privilege || !remote) senditemstoserver = true;
     }
 
     void writeclientinfo(stream *f)
     {
-        f->printf("name \"%s\"\n", player1->name);
+        f->printf("name %s\n", escapestring(player1->name));
     }
 
     bool allowedittoggle()
     {
+        if(editmode) return true;
         if(connected && multiplayer(false) && !m_edit)
         {
             conoutf(CON_ERROR, "editing in multiplayer requires coop edit mode (1)");
@@ -198,6 +288,13 @@ namespace game
     }
     ICOMMAND(ismaster, "i", (int *cn), intret(ismaster(*cn) ? 1 : 0));
 
+    bool isauth(int cn)
+    {
+        fpsent *d = getclient(cn);
+        return d && d->privilege >= PRIV_AUTH;
+    }
+    ICOMMAND(isauth, "i", (int *cn), intret(isauth(*cn) ? 1 : 0));
+
     bool isadmin(int cn)
     {
         fpsent *d = getclient(cn);
@@ -248,18 +345,18 @@ namespace game
     }
     ICOMMAND(getclientnum, "s", (char *name), intret(name[0] ? parseplayer(name) : player1->clientnum));
 
-    void listclients(bool local)
+    void listclients(bool local, bool bots)
     {
         vector<char> buf;
         string cn;
         int numclients = 0;
-        if(local)
+        if(local && connected)
         {
             formatstring(cn)("%d", player1->clientnum);
             buf.put(cn, strlen(cn));
             numclients++;
         }
-        loopv(clients) if(clients[i])
+        loopv(clients) if(clients[i] && (bots || clients[i]->aitype == AI_NONE))
         {
             formatstring(cn)("%d", clients[i]->clientnum);
             if(numclients++) buf.add(' ');
@@ -268,7 +365,7 @@ namespace game
         buf.add('\0');
         result(buf.getbuf());
     }
-    ICOMMAND(listclients, "i", (int *local), listclients(*local!=0));
+    ICOMMAND(listclients, "bb", (int *local, int *bots), listclients(*local>0, *bots!=0));
 
     void clearbans()
     {
@@ -276,17 +373,55 @@ namespace game
     }
     COMMAND(clearbans, "");
 
-    void kick(const char *arg)
+    void kick(const char *victim, const char *reason)
     {
-        int i = parseplayer(arg);
-        if(i>=0 && i!=player1->clientnum) addmsg(N_KICK, "ri", i);
+        int vn = parseplayer(victim);
+        if(vn>=0 && vn!=player1->clientnum) addmsg(N_KICK, "ris", vn, reason);
     }
-    COMMAND(kick, "s");
+    COMMAND(kick, "ss");
+
+    void authkick(const char *desc, const char *victim, const char *reason)
+    {
+        authkey *a = findauthkey(desc);
+        int vn = parseplayer(victim);
+        if(a && vn>=0 && vn!=player1->clientnum) 
+        {
+            a->lastauth = lastmillis;
+            addmsg(N_AUTHKICK, "rssis", a->desc, a->name, vn, reason);
+        }
+    }
+    ICOMMAND(authkick, "ss", (const char *victim, const char *reason), authkick("", victim, reason));
+    ICOMMAND(sauthkick, "ss", (const char *victim, const char *reason), if(servauth[0]) authkick(servauth, victim, reason));
+    ICOMMAND(dauthkick, "sss", (const char *desc, const char *victim, const char *reason), if(desc[0]) authkick(desc, victim, reason));
+
+    vector<int> ignores;
+
+    void ignore(int cn)
+    {
+        fpsent *d = getclient(cn);
+        if(!d || d == player1) return;
+        conoutf("ignoring %s", d->name);
+        if(ignores.find(cn) < 0) ignores.add(cn);
+    }
+
+    void unignore(int cn)
+    {
+        if(ignores.find(cn) < 0) return;
+        fpsent *d = getclient(cn);
+        if(d) conoutf("stopped ignoring %s", d->name);
+        ignores.removeobj(cn);
+    }
+
+    bool isignored(int cn) { return ignores.find(cn) >= 0; }
+
+    ICOMMAND(ignore, "s", (char *arg), ignore(parseplayer(arg)));
+    ICOMMAND(unignore, "s", (char *arg), unignore(parseplayer(arg))); 
+    ICOMMAND(isignored, "s", (char *arg), intret(isignored(parseplayer(arg)) ? 1 : 0));
 
     void setteam(const char *arg1, const char *arg2)
     {
         int i = parseplayer(arg1);
-        if(i>=0 && i!=player1->clientnum) addmsg(N_SETTEAM, "ris", i, arg2);
+        if(i>=0) addmsg(N_SETTEAM, "ris", i, arg2);
     }
     COMMAND(setteam, "ss");
 
@@ -299,16 +434,25 @@ namespace game
     }
     COMMAND(hashpwd, "s");
 
-    void setmaster(const char *arg)
+    void setmaster(const char *arg, const char *who)
     {
         if(!arg[0]) return;
-        int val = 1;
+        int val = 1, cn = player1->clientnum;
+        if(who[0])
+        {
+            cn = parseplayer(who);
+            if(cn < 0) return;
+        }
         string hash = "";
         if(!arg[1] && isdigit(arg[0])) val = parseint(arg);
-        else server::hashpassword(player1->clientnum, sessionid, arg, hash);
-        addmsg(N_SETMASTER, "ris", val, hash);
+        else 
+        {
+            if(cn != player1->clientnum) return;
+            server::hashpassword(player1->clientnum, sessionid, arg, hash);
+        }
+        addmsg(N_SETMASTER, "riis", cn, val, hash);
     }
-    COMMAND(setmaster, "s");
+    COMMAND(setmaster, "ss");
     ICOMMAND(mastermode, "i", (int *val), addmsg(N_MASTERMODE, "ri", *val));
 
     bool tryauth(const char *desc)
@@ -320,6 +464,8 @@ namespace game
         return true;
     }
     ICOMMAND(auth, "s", (char *desc), tryauth(desc));
+    ICOMMAND(sauth, "", (), if(servauth[0]) tryauth(servauth));
+    ICOMMAND(dauth, "s", (char *desc), if(desc[0]) tryauth(desc));
 
     void togglespectator(int val, const char *who)
     {
@@ -329,11 +475,6 @@ namespace game
     ICOMMAND(spectator, "is", (int *val, char *who), togglespectator(*val, who));
 
     ICOMMAND(checkmaps, "", (), addmsg(N_CHECKMAPS, "r"));
-
-    VARP(localmode, STARTGAMEMODE, 1, STARTGAMEMODE + NUMGAMEMODES - 1);
-    SVARP(localmap, "complex");
-    VARP(lobbymode, STARTGAMEMODE, 0, STARTGAMEMODE + NUMGAMEMODES - 1);
-    SVARP(lobbymap, "complex");
 
     int gamemode = INT_MAX, nextmode = INT_MAX;
     string clientmap = "";
@@ -391,6 +532,7 @@ namespace game
     ICOMMANDS("m_ctf", "i", (int *mode), { int gamemode = *mode; intret(m_ctf); });
     ICOMMANDS("m_protect", "i", (int *mode), { int gamemode = *mode; intret(m_protect); });
     ICOMMANDS("m_hold", "i", (int *mode), { int gamemode = *mode; intret(m_hold); });
+    ICOMMANDS("m_collect", "i", (int *mode), { int gamemode = *mode; intret(m_collect); });
     ICOMMANDS("m_teammode", "i", (int *mode), { int gamemode = *mode; intret(m_teammode); });
     ICOMMANDS("m_demo", "i", (int *mode), { int gamemode = *mode; intret(m_demo); });
     ICOMMANDS("m_edit", "i", (int *mode), { int gamemode = *mode; intret(m_edit); });
@@ -401,8 +543,6 @@ namespace game
 
     void changemap(const char *name, int mode) // request map change, server may ignore
     {
-        if(m_checknot(mode, M_EDIT) && !name[0])
-            name = clientmap[0] ? clientmap : (remote ? lobbymap : localmap);
         if(!remote)
         {
             server::forcemap(name, mode);
@@ -412,7 +552,7 @@ namespace game
     }
     void changemap(const char *name)
     {
-        changemap(name, m_valid(nextmode) ? nextmode : (remote ? lobbymode : localmode));
+        changemap(name, m_valid(nextmode) ? nextmode : (remote ? 0 : 1));
     }
     ICOMMAND(map, "s", (char *name), changemap(name));
 
@@ -513,7 +653,9 @@ namespace game
             {
                 int val = *id->storage.i;
                 string str;
-                if(id->flags&IDF_HEX && id->maxval==0xFFFFFF)
+                if(val < 0)
+                    formatstring(str)("%d", val); 
+                else if(id->flags&IDF_HEX && id->maxval==0xFFFFFF)
                     formatstring(str)("0x%.6X (%d, %d, %d)", val, (val>>16)&0xFF, (val>>8)&0xFF, val&0xFF);
                 else
                     formatstring(str)(id->flags&IDF_HEX ? "0x%X" : "%d", val);
@@ -550,13 +692,38 @@ namespace game
         printvar(player1, id);
     }
 
-    void pausegame(int *val)
+    void pausegame(bool val)
     {
-        addmsg(N_PAUSEGAME, "ri", *val > 0 ? 1 : 0);
+        if(!connected) return;
+        if(!remote) server::forcepaused(val);
+        else addmsg(N_PAUSEGAME, "ri", val ? 1 : 0);
     }
-    COMMAND(pausegame, "i");
+    ICOMMAND(pausegame, "i", (int *val), pausegame(*val > 0));
+    ICOMMAND(paused, "iN$", (int *val, int *numargs, ident *id),
+    { 
+        if(*numargs > 0) pausegame(clampvar(id, *val, 0, 1) > 0); 
+        else if(*numargs < 0) intret(gamepaused ? 1 : 0);
+        else printvar(id, gamepaused ? 1 : 0); 
+    });
 
     bool ispaused() { return gamepaused; }
+
+    bool allowmouselook() { return !gamepaused || !remote || m_edit; }
+
+    void changegamespeed(int val)
+    {
+        if(!connected) return;
+        if(!remote) server::forcegamespeed(val);
+        else addmsg(N_GAMESPEED, "ri", val);
+    }
+    ICOMMAND(gamespeed, "iN$", (int *val, int *numargs, ident *id),
+    {
+        if(*numargs > 0) changegamespeed(clampvar(id, *val, 10, 1000));
+        else if(*numargs < 0) intret(gamespeed);
+        else printvar(id, gamespeed);
+    });
+
+    int scaletime(int t) { return t*gamespeed; }
 
     // collect c2s messages conveniently
     vector<uchar> messages;
@@ -611,7 +778,7 @@ namespace game
             va_end(args);
         }
         int num = nums || numf ? 0 : numi, msgsize = server::msgsizelookup(type);
-        if(msgsize && num!=msgsize) { defformatstring(s)("inconsistent msg size for %d (%d != %d)", type, num, msgsize); fatal(s); }
+        if(msgsize && num!=msgsize) { fatal("inconsistent msg size for %d (%d != %d)", type, num, msgsize); }
         if(reliable) messagereliable = true;
         if(mcn != messagecn)
         {
@@ -645,6 +812,7 @@ namespace game
     void gamedisconnect(bool cleanup)
     {
         if(remote) stopfollowing();
+        ignores.setsize(0);
         connected = remote = false;
         player1->clientnum = -1;
         sessionid = 0;
@@ -656,9 +824,10 @@ namespace game
         player1->lifesequence = 0;
         player1->state = CS_ALIVE;
         player1->privilege = PRIV_NONE;
-        senditemstoserver = false;
+        sendcrc = senditemstoserver = false;
         demoplayback = false;
         gamepaused = false;
+        gamespeed = 100;
         clearclients(false);
         if(cleanup)
         {
@@ -672,6 +841,8 @@ namespace game
 
     void sayteam(char *text) { conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(player1), text); addmsg(N_SAYTEAM, "rcs", player1, text); }
     COMMAND(sayteam, "C");
+
+    ICOMMAND(servcmd, "C", (char *cmd), addmsg(N_SERVCMD, "rs", cmd));
 
     static void sendposition(fpsent *d, packetbuf &q)
     {
@@ -784,11 +955,11 @@ namespace game
             messagereliable = false;
             messagecn = -1;
         }
-        if(lastmillis-lastping>250)
+        if(totalmillis-lastping>250)
         {
             putint(p, N_PING);
-            putint(p, lastmillis);
-            lastping = lastmillis;
+            putint(p, totalmillis);
+            lastping = totalmillis;
         }
         sendclientpacket(p.finalize(), 1);
     }
@@ -808,6 +979,7 @@ namespace game
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_CONNECT);
         sendstring(player1->name, p);
+        putint(p, player1->playermodel);
         string hash = "";
         if(connectpass[0])
         {
@@ -815,7 +987,18 @@ namespace game
             memset(connectpass, 0, sizeof(connectpass));
         }
         sendstring(hash, p);
-        putint(p, player1->playermodel);
+        authkey *a = servauth[0] && autoauth ? findauthkey(servauth) : NULL;
+        if(a)
+        {
+            a->lastauth = lastmillis;
+            sendstring(a->desc, p);
+            sendstring(a->name, p);
+        }
+        else
+        {
+            sendstring("", p);
+            sendstring("", p);
+        }
         sendclientpacket(p.finalize(), 1);
     }
 
@@ -836,11 +1019,11 @@ namespace game
             if(fx<fy) d->o.y += dy<0 ? r-fy : -(r-fy);  // push aside
             else      d->o.x += dx<0 ? r-fx : -(r-fx);
         }
-        int lagtime = lastmillis-d->lastupdate;
+        int lagtime = totalmillis-d->lastupdate;
         if(lagtime)
         {
             if(d->state!=CS_SPAWNING && d->lastupdate) d->plag = (d->plag*5+lagtime)/6;
-            d->lastupdate = lastmillis;
+            d->lastupdate = totalmillis;
         }
     }
 
@@ -849,6 +1032,7 @@ namespace game
         int type;
         while(p.remaining()) switch(type = getint(p))
         {
+            case N_DEMOPACKET: break;
             case N_POS:                        // position of another client
             {
                 int cn = getuint(p), physstate = p.get(), flags = getuint(p);
@@ -882,7 +1066,7 @@ namespace game
                 int seqcolor = (physstate>>3)&1;
                 fpsent *d = getclient(cn);
                 if(!d || d->lifesequence < 0 || seqcolor!=(d->lifesequence&1) || d->state==CS_DEAD) continue;
-                float oldyaw = d->yaw, oldpitch = d->pitch;
+                float oldyaw = d->yaw, oldpitch = d->pitch, oldroll = d->roll;
                 d->yaw = yaw;
                 d->pitch = pitch;
                 d->roll = roll;
@@ -904,14 +1088,17 @@ namespace game
                     d->newpos = d->o;
                     d->newyaw = d->yaw;
                     d->newpitch = d->pitch;
+                    d->newroll = d->roll;
                     d->o = oldpos;
                     d->yaw = oldyaw;
                     d->pitch = oldpitch;
+                    d->roll = oldroll;
                     (d->deltapos = oldpos).sub(d->newpos);
                     d->deltayaw = oldyaw - d->newyaw;
                     if(d->deltayaw > 180) d->deltayaw -= 360;
                     else if(d->deltayaw < -180) d->deltayaw += 360;
                     d->deltapitch = oldpitch - d->newpitch;
+                    d->deltaroll = oldroll - d->newroll;
                     d->smoothmillis = lastmillis;
                 }
                 else d->smoothmillis = 0;
@@ -967,7 +1154,8 @@ namespace game
         }
         else
         {
-            d->gunselect = getint(p);
+            int gun = getint(p);
+            d->gunselect = clamp(gun, int(GUN_FIST), int(GUN_PISTOL));
             loopi(GUN_PISTOL-GUN_SG+1) d->ammo[GUN_SG+i] = getint(p);
         }
     }
@@ -978,10 +1166,12 @@ namespace game
     {
         static char text[MAXTRANS];
         int type;
-        bool mapchanged = false, initmap = false;
+        bool mapchanged = false, demopacket = false;
 
         while(p.remaining()) switch(type = getint(p))
         {
+            case N_DEMOPACKET: demopacket = true; break;
+
             case N_SERVINFO:                   // welcome messsage from the server
             {
                 int mycn = getint(p), prot = getint(p);
@@ -994,27 +1184,45 @@ namespace game
                 sessionid = getint(p);
                 player1->clientnum = mycn;      // we are now connected
                 if(getint(p) > 0) conoutf("this server is password protected");
-                getstring(text, p);
-                copystring(servinfo, text);
+                getstring(servinfo, p, sizeof(servinfo));
+                getstring(servauth, p, sizeof(servauth));
                 sendintro();
                 break;
             }
 
             case N_WELCOME:
             {
-                int hasmap = getint(p);
-                if(!hasmap) initmap = true; // we are the first client on this server, set map
+                notifywelcome();
                 break;
             }
 
             case N_PAUSEGAME:
             {
-                int val = getint(p);
-                gamepaused = val > 0;
-                conoutf("game is %s", gamepaused ? "paused" : "resumed");
+                bool val = getint(p) > 0;
+                int cn = getint(p);
+                fpsent *a = cn >= 0 ? getclient(cn) : NULL;
+                if(!demopacket)
+                {
+                    gamepaused = val;
+                    player1->attacking = false;
+                }
+                if(a) conoutf("%s %s the game", colorname(a), val ? "paused" : "resumed"); 
+                else conoutf("game is %s", val ? "paused" : "resumed");
                 break;
             }
 
+            case N_GAMESPEED:
+            {
+                int val = clamp(getint(p), 10, 1000), cn = getint(p);
+                fpsent *a = cn >= 0 ? getclient(cn) : NULL;
+                if(!demopacket) gamespeed = val;
+                extern int slowmosp;
+                if(m_sp && slowmosp) break;
+                if(a) conoutf("%s set gamespeed to %d", colorname(a), val);
+                else conoutf("gamespeed is %d", val);
+                break;
+            }
+                
             case N_CLIENT:
             {
                 int cn = getint(p), len = getuint(p);
@@ -1033,22 +1241,23 @@ namespace game
                 if(!d) return;
                 getstring(text, p);
                 filtertext(text, text);
+                if(isignored(d->clientnum)) break;
                 if(d->state!=CS_DEAD && d->state!=CS_SPECTATOR)
                     particle_textcopy(d->abovehead(), text, PART_TEXT, 2000, 0x32FF64, 4.0f, -8);
-				conoutf(CON_CHAT, (isteam(player1->team, d->team) ? d->state==CS_DEAD ? "\f1%s:\fh %s" : d->state==CS_SPECTATOR ? "\f1%s:\f9 %s" : "\f1%s:\fg %s" : d->state==CS_DEAD ? "\f3%s:\fh %s" : d->state==CS_SPECTATOR ? "\f3%s:\f9 %s" : "\f3%s:\fg %s"), colorname(d), text);
+                conoutf(CON_CHAT, (isteam(player1->team, d->team) ? d->state==CS_DEAD ? "\f1%s:\fh %s" : d->state==CS_SPECTATOR ? "\f1%s:\f7 %s" : "\f1%s:\fg %s" : d->state==CS_DEAD ? "\f3%s:\fh %s" : d->state==CS_SPECTATOR ? "\f3%s:\f7 %s" : "\f3%s:\fg %s"), colorname(d), text);
                 break;
             }
-				
+
             case N_SAYTEAM:
             {
                 int tcn = getint(p);
                 fpsent *t = getclient(tcn);
                 getstring(text, p);
                 filtertext(text, text);
-                if(!t) break;
+                if(!t || isignored(t->clientnum)) break;
                 if(t->state!=CS_DEAD && t->state!=CS_SPECTATOR)
                     particle_textcopy(t->abovehead(), text, PART_TEXT, 2000, 0x6496FF, 4.0f, -8);
-                conoutf(CON_TEAMCHAT, t->state==CS_DEAD ? "%s:\fh %s" : t->state==CS_SPECTATOR ? "%s:\f9 %s" : "%s:\fg %s", colorname(t), text);
+                conoutf(CON_TEAMCHAT, "%s:\f1 %s", colorname(t), text);
                 break;
             }
 
@@ -1087,14 +1296,6 @@ namespace game
                 break;
             }
 
-            case N_MAPRELOAD:          // server requests next map
-            {
-                defformatstring(nextmapalias)("nextmap_%s%s", (cmode ? cmode->prefixnextmap() : ""), getclientmap());
-                const char *map = getalias(nextmapalias);     // look up map in the cycle
-                addmsg(N_MAPCHANGE, "rsi", *map ? map : getclientmap(), nextmode);
-                break;
-            }
-
             case N_INITCLIENT:            // another client either connected or changed name/team
             {
                 int cn = getint(p);
@@ -1111,12 +1312,12 @@ namespace game
                 if(!text[0]) copystring(text, "unnamed");
                 if(d->name[0])          // already connected
                 {
-                    if(strcmp(d->name, text))
+                    if(strcmp(d->name, text) && !isignored(d->clientnum))
                         conoutf("%s is now known as %s", colorname(d), colorname(d, text));
                 }
                 else                    // new client
                 {
-                    conoutf("connected: %s", colorname(d, text));
+                    conoutf("\f0join:\f7 %s", colorname(d, text));
                     if(needclipboard >= 0) needclipboard++;
                 }
                 copystring(d->name, text, MAXNAMELEN+1);
@@ -1134,7 +1335,7 @@ namespace game
                     if(!text[0]) copystring(text, "unnamed");
                     if(strcmp(text, d->name))
                     {
-                        conoutf("%s is now known as %s", colorname(d), colorname(d, text));
+                        if(!isignored(d->clientnum)) conoutf("%s is now known as %s", colorname(d), colorname(d, text));
                         copystring(d->name, text, MAXNAMELEN+1);
                     }
                 }
@@ -1192,7 +1393,7 @@ namespace game
                     lasthit = 0;
                 }
                 if(cmode) cmode->respawned(s);
-				ai::spawned(s);
+                ai::spawned(s);
                 addmsg(N_SPAWN, "rcii", s, s->lifesequence, s->gunselect);
                 break;
             }
@@ -1211,8 +1412,8 @@ namespace game
                 int prevaction = s->lastaction;
                 s->lastaction = lastmillis;
                 s->lastattackgun = s->gunselect;
-                shoteffects(gun, from, to, s, false, id, prevaction);
-				s->totalshots += guns[s->gunselect].damage*(s->quadmillis ? 4 : 1)*(s->gunselect==GUN_SG ? SGRAYS : 1);
+                shoteffects(s->gunselect, from, to, s, false, id, prevaction);
+                s->totalshots += guns[s->gunselect].damage*(s->quadmillis ? 4 : 1)*(s->gunselect==GUN_SG ? MAXRAYS : 1);
                 break;
             }
 
@@ -1238,7 +1439,7 @@ namespace game
                 target->health = health;
                 if(target->state == CS_ALIVE && actor != player1) target->lastpain = lastmillis;
                 damaged(damage, target, actor, false);
-				if(!actor->skill && actor != player1) actor->totaldamage += damage;
+                if(!actor->skill && actor != player1) actor->totaldamage += damage;
                 break;
             }
 
@@ -1254,11 +1455,12 @@ namespace game
 
             case N_DIED:
             {
-                int vcn = getint(p), acn = getint(p), frags = getint(p);
+                int vcn = getint(p), acn = getint(p), frags = getint(p), tfrags = getint(p);
                 fpsent *victim = getclient(vcn),
                        *actor = getclient(acn);
                 if(!actor) break;
                 actor->frags = frags;
+                if(m_teammode) setteaminfo(actor->team, tfrags);
                 if(actor!=player1 && (!cmode || !cmode->hidefrags()))
                 {
                     defformatstring(ds)("%d", actor->frags);
@@ -1269,11 +1471,22 @@ namespace game
                 break;
             }
 
+            case N_TEAMINFO:
+                for(;;)
+                {
+                    getstring(text, p);
+                    if(p.overread() || !text[0]) break;
+                    int frags = getint(p);
+                    if(p.overread()) break;
+                    if(m_teammode) setteaminfo(text, frags);
+                }
+                break;
+
             case N_GUNSELECT:
             {
                 if(!d) return;
                 int gun = getint(p);
-                d->gunselect = max(gun, 0);
+                d->gunselect = clamp(gun, int(GUN_FIST), int(GUN_PISTOL));
                 playsound(S_WEAPLOAD, &d->o);
                 break;
             }
@@ -1303,7 +1516,7 @@ namespace game
                 if(!entities::ents.inrange(i)) break;
                 entities::setspawn(i, true);
                 ai::itemspawned(i);
-                playsound(S_ITEMSPAWN, &entities::ents[i]->o, NULL, 0, 0, -1, 0, 1500);
+                playsound(S_ITEMSPAWN, &entities::ents[i]->o, NULL, 0, 0, 0, -1, 0, 1500);
                 #if 0
                 const char *name = entities::itemname(i);
                 if(name) particle_text(entities::ents[i]->o, name, PART_TEXT, 2000, 0x32FF64, 4.0f, -8);
@@ -1351,15 +1564,15 @@ namespace game
                 ivec moveo;
                 switch(type)
                 {
-                    case N_EDITF: dir = getint(p); mode = getint(p); mpeditface(dir, mode, sel, false); break;
-                    case N_EDITT: tex = getint(p); allfaces = getint(p); mpedittex(tex, allfaces, sel, false); break;
-                    case N_EDITM: mat = getint(p); filter = getint(p); mpeditmat(mat, filter, sel, false); break;
-                    case N_FLIP: mpflip(sel, false); break;
-                    case N_COPY: if(d) mpcopy(d->edit, sel, false); break;
-                    case N_PASTE: if(d) mppaste(d->edit, sel, false); break;
-                    case N_ROTATE: dir = getint(p); mprotate(dir, sel, false); break;
-                    case N_REPLACE: tex = getint(p); newtex = getint(p); insel = getint(p); mpreplacetex(tex, newtex, insel>0, sel, false); break;
-                    case N_DELCUBE: mpdelcube(sel, false); break;
+                    case N_EDITF: dir = getint(p); mode = getint(p); if(sel.validate()) mpeditface(dir, mode, sel, false); break;
+                    case N_EDITT: tex = getint(p); allfaces = getint(p); if(sel.validate()) mpedittex(tex, allfaces, sel, false); break;
+                    case N_EDITM: mat = getint(p); filter = getint(p); if(sel.validate()) mpeditmat(mat, filter, sel, false); break;
+                    case N_FLIP: if(sel.validate()) mpflip(sel, false); break;
+                    case N_COPY: if(d && sel.validate()) mpcopy(d->edit, sel, false); break;
+                    case N_PASTE: if(d && sel.validate()) mppaste(d->edit, sel, false); break;
+                    case N_ROTATE: dir = getint(p); if(sel.validate()) mprotate(dir, sel, false); break;
+                    case N_REPLACE: tex = getint(p); newtex = getint(p); insel = getint(p); if(sel.validate()) mpreplacetex(tex, newtex, insel>0, sel, false); break;
+                    case N_DELCUBE: if(sel.validate()) mpdelcube(sel, false); break;
                 }
                 break;
             }
@@ -1394,19 +1607,19 @@ namespace game
                     case ID_VAR:
                     {
                         int val = getint(p);
-                        if(id && !(id->flags&IDF_READONLY)) setvar(name, val);
+                        if(id && id->flags&IDF_OVERRIDE && !(id->flags&IDF_READONLY)) setvar(name, val);
                         break;
                     }
                     case ID_FVAR:
                     {
                         float val = getfloat(p);
-                        if(id && !(id->flags&IDF_READONLY)) setfvar(name, val);
+                        if(id && id->flags&IDF_OVERRIDE && !(id->flags&IDF_READONLY)) setfvar(name, val);
                         break;
                     }
                     case ID_SVAR:
                     {
                         getstring(text, p);
-                        if(id && !(id->flags&IDF_READONLY)) setsvar(name, text);
+                        if(id && id->flags&IDF_OVERRIDE && !(id->flags&IDF_READONLY)) setsvar(name, text);
                         break;
                     }
                 }
@@ -1415,7 +1628,7 @@ namespace game
             }
 
             case N_PONG:
-                addmsg(N_CLIENTPING, "i", player1->ping = (player1->ping*5+lastmillis-getint(p))/6);
+                addmsg(N_CLIENTPING, "i", player1->ping = (player1->ping*5+totalmillis-getint(p))/6);
                 break;
 
             case N_CLIENTPING:
@@ -1435,10 +1648,11 @@ namespace game
             case N_SENDDEMOLIST:
             {
                 int demos = getint(p);
-                if(!demos) conoutf("no demos available");
+                if(demos <= 0) conoutf("no demos available");
                 else loopi(demos)
                 {
                     getstring(text, p);
+                    if(p.overread()) break;
                     conoutf("%d. %s", i+1, text);
                 }
                 break;
@@ -1459,11 +1673,12 @@ namespace game
 
             case N_CURRENTMASTER:
             {
-                int mn = getint(p), priv = getint(p), mm = getint(p);
+                int mm = getint(p), mn;
                 loopv(players) players[i]->privilege = PRIV_NONE;
-                if(mn>=0)
+                while((mn = getint(p))>=0 && !p.overread())
                 {
                     fpsent *m = mn==player1->clientnum ? player1 : newclient(mn);
+                    int priv = getint(p);
                     if(m) m->privilege = priv;
                 }
                 if(mm != mastermode)
@@ -1544,13 +1759,14 @@ namespace game
             #define PARSEMESSAGES 1
             #include "capture.h"
             #include "ctf.h"
+            #include "collect.h"
             #undef PARSEMESSAGES
 
             case N_ANNOUNCE:
             {
                 int t = getint(p);
-                if     (t==I_QUAD)  { playsound(S_V_QUAD10, NULL, NULL, 0, 0, -1, 0, 3000);  conoutf(CON_GAMEINFO, "\f2quad damage will spawn in 10 seconds!"); }
-                else if(t==I_BOOST) { playsound(S_V_BOOST10, NULL, NULL, 0, 0, -1, 0, 3000); conoutf(CON_GAMEINFO, "\f2+10 health will spawn in 10 seconds!"); }
+                if     (t==I_QUAD)  { playsound(S_V_QUAD10, NULL, NULL, 0, 0, 0, -1, 0, 3000);  conoutf(CON_GAMEINFO, "\f2quad damage will spawn in 10 seconds!"); }
+                else if(t==I_BOOST) { playsound(S_V_BOOST10, NULL, NULL, 0, 0, 0, -1, 0, 3000); conoutf(CON_GAMEINFO, "\f2+10 health will spawn in 10 seconds!"); }
                 break;
             }
 
@@ -1605,38 +1821,30 @@ namespace game
                 break;
             }
 
+            case N_SERVCMD:
+                getstring(text, p);
+                break;
+
             default:
                 neterr("type", cn < 0);
                 return;
         }
-        if(initmap)
-        {
-            int mode = gamemode;
-            const char *map = getclientmap();
-            if((multiplayer(false) && !m_mp(mode)) || (mode!=1 && !map[0]))
-            {
-                mode = remote ? lobbymode : localmode;
-                map = remote ? lobbymap : localmap;
-            }
-            changemap(map, mode);
-        }
     }
 
-    void receivefile(uchar *data, int len)
+    void receivefile(packetbuf &p)
     {
-        ucharbuf p(data, len);
-        int type = getint(p);
-        data += p.length();
-        len -= p.length();
-        switch(type)
+        int type;
+        while(p.remaining()) switch(type = getint(p))
         {
+            case N_DEMOPACKET: return;
             case N_SENDDEMO:
             {
                 defformatstring(fname)("%d.dmo", lastmillis);
                 stream *demo = openrawfile(fname, "wb");
                 if(!demo) return;
                 conoutf("received demo \"%s\"", fname);
-                demo->write(data, len);
+                ucharbuf b = p.subbuf(p.remaining());
+                demo->write(b.buf, b.maxlen);
                 delete demo;
                 break;
             }
@@ -1651,11 +1859,12 @@ namespace game
                 stream *map = openrawfile(path(fname), "wb");
                 if(!map) return;
                 conoutf("received map");
-                map->write(data, len);
+                ucharbuf b = p.subbuf(p.remaining());
+                map->write(b.buf, b.maxlen);
                 delete map;
-                load_world(mname, oldname[0] ? oldname : NULL);
+                if(load_world(mname, oldname[0] ? oldname : NULL))
+                    entities::spawnitems(true);
                 remove(findfile(fname, "rb"));
-                entities::spawnitems(true);
                 break;
             }
         }
@@ -1663,6 +1872,7 @@ namespace game
 
     void parsepacketclient(int chan, packetbuf &p)   // processes any updates from the server
     {
+        if(p.packet->flags&ENET_PACKET_FLAG_UNSEQUENCED) return;
         switch(chan)
         {
             case 0:
@@ -1674,7 +1884,7 @@ namespace game
                 break;
 
             case 2:
-                receivefile(p.buf, p.maxlen);
+                receivefile(p);
                 break;
         }
     }
@@ -1691,7 +1901,7 @@ namespace game
     {
         if(remote)
         {
-            if(player1->privilege<PRIV_ADMIN) return;
+            if(player1->privilege<PRIV_MASTER) return;
             addmsg(N_STOPDEMO, "r");
         }
         else server::stopdemo();
@@ -1700,14 +1910,14 @@ namespace game
 
     void recorddemo(int val)
     {
-        if(remote && player1->privilege<PRIV_ADMIN) return;
+        if(remote && player1->privilege<PRIV_MASTER) return;
         addmsg(N_RECORDDEMO, "ri", val);
     }
     ICOMMAND(recorddemo, "i", (int *val), recorddemo(*val));
 
     void cleardemos(int val)
     {
-        if(remote && player1->privilege<PRIV_ADMIN) return;
+        if(remote && player1->privilege<PRIV_MASTER) return;
         addmsg(N_CLEARDEMOS, "ri", val);
     }
     ICOMMAND(cleardemos, "i", (int *val), cleardemos(*val));
@@ -1737,8 +1947,8 @@ namespace game
         stream *map = openrawfile(path(fname), "rb");
         if(map)
         {
-            int len = map->size();
-            if(len > 1024*1024) conoutf(CON_ERROR, "map is too large");
+            stream::offset len = map->size();
+            if(len > 4*1024*1024) conoutf(CON_ERROR, "map is too large");
             else if(len <= 0) conoutf(CON_ERROR, "could not read map");
             else
             {

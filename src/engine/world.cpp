@@ -47,25 +47,26 @@ bool getentboundingbox(extentity &e, ivec &o, ivec &r)
 enum
 {
     MODOE_ADD      = 1<<0,
-    MODOE_UPDATEBB = 1<<1
+    MODOE_UPDATEBB = 1<<1,
+    MODOE_LIGHTENT = 1<<2
 };
 
-void modifyoctaentity(int flags, int id, cube *c, const ivec &cor, int size, const ivec &bo, const ivec &br, int leafsize, vtxarray *lastva = NULL)
+void modifyoctaentity(int flags, int id, extentity &e, cube *c, const ivec &cor, int size, const ivec &bo, const ivec &br, int leafsize, vtxarray *lastva = NULL)
 {
     loopoctabox(cor, size, bo, br)
     {
         ivec o(i, cor.x, cor.y, cor.z, size);
         vtxarray *va = c[i].ext && c[i].ext->va ? c[i].ext->va : lastva;
         if(c[i].children != NULL && size > leafsize)
-            modifyoctaentity(flags, id, c[i].children, o, size>>1, bo, br, leafsize, va);
+            modifyoctaentity(flags, id, e, c[i].children, o, size>>1, bo, br, leafsize, va);
         else if(flags&MODOE_ADD)
         {
             if(!c[i].ext || !c[i].ext->ents) ext(c[i]).ents = new octaentities(o, size);
             octaentities &oe = *c[i].ext->ents;
-            switch(entities::getents()[id]->type)
+            switch(e.type)
             {
                 case ET_MAPMODEL:
-                    if(loadmodel(NULL, entities::getents()[id]->attr2))
+                    if(loadmodel(NULL, e.attr2))
                     {
                         if(va)
                         {
@@ -90,10 +91,10 @@ void modifyoctaentity(int flags, int id, cube *c, const ivec &cor, int size, con
         else if(c[i].ext && c[i].ext->ents)
         {
             octaentities &oe = *c[i].ext->ents;
-            switch(entities::getents()[id]->type)
+            switch(e.type)
             {
                 case ET_MAPMODEL:
-                    if(loadmodel(NULL, entities::getents()[id]->attr2))
+                    if(loadmodel(NULL, e.attr2))
                     {
                         oe.mapmodels.removeobj(id);
                         if(va)
@@ -142,13 +143,12 @@ void modifyoctaentity(int flags, int id, cube *c, const ivec &cor, int size, con
 
 vector<int> outsideents;
 
-static bool modifyoctaent(int flags, int id)
+static bool modifyoctaent(int flags, int id, extentity &e)
 {
-    vector<extentity *> &ents = entities::getents();
-    if(!ents.inrange(id)) return false;
+    if(flags&MODOE_ADD ? e.inoctanode : !e.inoctanode) return false;
+
     ivec o, r;
-    extentity &e = *ents[id];
-    if((flags&MODOE_ADD ? e.inoctanode : !e.inoctanode) || !getentboundingbox(e, o, r)) return false;
+    if(!getentboundingbox(e, o, r)) return false;
 
     if(!insideworld(e.o)) 
     {
@@ -165,16 +165,22 @@ static bool modifyoctaent(int flags, int id)
         while(leafsize < limit) leafsize *= 2;
         int diff = ~(leafsize-1) & ((o.x^(o.x+r.x))|(o.y^(o.y+r.y))|(o.z^(o.z+r.z)));
         if(diff && (limit > octaentsize/2 || diff < leafsize*2)) leafsize *= 2;
-        modifyoctaentity(flags, id, worldroot, ivec(0, 0, 0), worldsize>>1, o, r, leafsize);
+        modifyoctaentity(flags, id, e, worldroot, ivec(0, 0, 0), worldsize>>1, o, r, leafsize);
     }
     e.inoctanode = flags&MODOE_ADD ? 1 : 0;
     if(e.type == ET_LIGHT) clearlightcache(id);
     else if(e.type == ET_PARTICLES) clearparticleemitters();
-    else if(flags&MODOE_ADD) lightent(e);
+    else if(flags&MODOE_LIGHTENT) lightent(e);
     return true;
 }
 
-static inline void addentity(int id)    { modifyoctaent(MODOE_ADD|MODOE_UPDATEBB, id); }
+static inline bool modifyoctaent(int flags, int id)
+{
+    vector<extentity *> &ents = entities::getents();
+    return ents.inrange(id) && modifyoctaent(flags, id, *ents[id]);
+}
+
+static inline void addentity(int id)    { modifyoctaent(MODOE_ADD|MODOE_UPDATEBB|MODOE_LIGHTENT, id); }
 static inline void removeentity(int id) { modifyoctaent(MODOE_UPDATEBB, id); }
 
 void freeoctaentities(cube &c)
@@ -194,8 +200,8 @@ void freeoctaentities(cube &c)
 
 void entitiesinoctanodes()
 {
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents) modifyoctaent(MODOE_ADD, i);
+    vector<extentity *> &ents = entities::getents();
+    loopv(ents) modifyoctaent(MODOE_ADD, i, *ents[i]);
 }
 
 static inline void findents(octaentities &oe, int low, int high, bool notspawned, const vec &pos, const vec &radius, vector<int> &found)
@@ -534,11 +540,12 @@ void renderentring(const extentity &e, float radius, int axis)
 {
     if(radius <= 0) return;
     glBegin(GL_LINE_LOOP);
-    loopi(16)
+    loopi(15)
     {
         vec p(e.o);
-        p[axis>=2 ? 1 : 0] += radius*cosf(2*M_PI*i/16.0f);
-        p[axis>=1 ? 2 : 1] += radius*sinf(2*M_PI*i/16.0f);
+        const vec2 &sc = sincos360[i*(360/15)];
+        p[axis>=2 ? 1 : 0] += radius*sc.x;
+        p[axis>=1 ? 2 : 1] += radius*sc.y;
         glVertex3fv(p.v);
     }
     glEnd();
@@ -627,7 +634,7 @@ void renderentradius(extentity &e, bool color)
                 float radius = e.attached->attr1;
                 if(!radius) radius = 2*e.o.dist(e.attached->o);
                 vec dir = vec(e.o).sub(e.attached->o).normalize();
-                float angle = max(1, min(90, int(e.attr1)));
+                float angle = clamp(int(e.attr1), 1, 89);
                 renderentattachment(e);
                 renderentcone(*e.attached, dir, radius, angle); 
             }
@@ -861,8 +868,18 @@ void attachent()
 
 COMMAND(attachent, "");
 
-extentity *newentity(bool local, const vec &o, int type, int v1, int v2, int v3, int v4, int v5)
+static int keepents = 0;
+
+extentity *newentity(bool local, const vec &o, int type, int v1, int v2, int v3, int v4, int v5, int &idx)
 {
+    vector<extentity *> &ents = entities::getents();
+    if(local)
+    {
+        idx = -1;
+        for(int i = keepents; i < ents.length(); i++) if(ents[i]->type == ET_EMPTY) { idx = i; break; }
+        if(idx < 0 && ents.length() >= MAXENTS) { conoutf("too many entities"); return NULL; }
+    }
+    else while(ents.length() < idx) ents.add(entities::newentity())->type = ET_EMPTY;
     extentity &e = *entities::newentity();
     e.o = o;
     e.attr1 = v1;
@@ -891,20 +908,21 @@ extentity *newentity(bool local, const vec &o, int type, int v1, int v2, int v3,
         }
         entities::fixentity(e);
     }
+    if(ents.inrange(idx)) { entities::deleteentity(ents[idx]); ents[idx] = &e; }
+    else { idx = ents.length(); ents.add(&e); }
     return &e;
 }
 
 void newentity(int type, int a1, int a2, int a3, int a4, int a5)
 {
-    if(entities::getents().length() >= MAXENTS) { conoutf("too many entities"); return; }
-    extentity *t = newentity(true, player->o, type, a1, a2, a3, a4, a5);
+    int idx;
+    extentity *t = newentity(true, player->o, type, a1, a2, a3, a4, a5, idx);
+    if(!t) return;
     dropentity(*t);
-    entities::getents().add(t);
-    int i = entities::getents().length()-1;
     t->type = ET_EMPTY;
-    enttoggle(i);
+    enttoggle(idx);
     makeundoent();
-    entedit(i, e.type = type);
+    entedit(idx, e.type = type);
 }
 
 void newent(char *what, int *a1, int *a2, int *a3, int *a4, int *a5)
@@ -932,17 +950,19 @@ void entpaste()
     if(noentedit()) return;
     if(entcopybuf.length()==0) return;
     entcancel();
-    int last = entities::getents().length()-1;
     float m = float(sel.grid)/float(entcopygrid);
     loopv(entcopybuf)
     {
         entity &c = entcopybuf[i];
         vec o(c.o);
         o.mul(m).add(sel.o.tovec());
-        extentity *e = newentity(true, o, ET_EMPTY, c.attr1, c.attr2, c.attr3, c.attr4, c.attr5);
-        entities::getents().add(e);
-        entadd(++last);
+        int idx;
+        extentity *e = newentity(true, o, ET_EMPTY, c.attr1, c.attr2, c.attr3, c.attr4, c.attr5, idx);
+        if(!e) continue;
+        entadd(idx);
+        keepents = max(keepents, idx+1);
     }
+    keepents = 0;
     int j = 0;
     groupeditundo(e.type = entcopybuf[j++].type;);
 }
@@ -957,12 +977,13 @@ void entset(char *what, int *a1, int *a2, int *a3, int *a4, int *a5)
 {
     if(noentedit()) return;
     int type = findtype(what);
-    groupedit(e.type=type;
-              e.attr1=*a1;
-              e.attr2=*a2;
-              e.attr3=*a3;
-              e.attr4=*a4;
-              e.attr5=*a5);
+    if(type != ET_EMPTY)
+        groupedit(e.type=type;
+                  e.attr1=*a1;
+                  e.attr2=*a2;
+                  e.attr3=*a3;
+                  e.attr4=*a4;
+                  e.attr5=*a5);
 }
 
 void printent(extentity &e, char *buf)
@@ -1001,13 +1022,58 @@ void nearestent()
 }    
             
 ICOMMAND(enthavesel,"",  (), addimplicit(intret(entgroup.length())));
-ICOMMAND(entselect, "s", (char *body), if(!noentedit()) addgroup(e.type != ET_EMPTY && entgroup.find(n)<0 && execute(body)>0));
-ICOMMAND(entloop,   "s", (char *body), if(!noentedit()) addimplicit(groupeditloop(((void)e, execute(body)))));
+ICOMMAND(entselect, "e", (uint *body), if(!noentedit()) addgroup(e.type != ET_EMPTY && entgroup.find(n)<0 && executebool(body)));
+ICOMMAND(entloop,   "e", (uint *body), if(!noentedit()) addimplicit(groupeditloop(((void)e, execute(body)))));
 ICOMMAND(insel,     "",  (), entfocus(efocus, intret(pointinsel(sel, e.o))));
 ICOMMAND(entget,    "",  (), entfocus(efocus, string s; printent(e, s); result(s)));
 ICOMMAND(entindex,  "",  (), intret(efocus));
 COMMAND(entset, "siiiii");
 COMMAND(nearestent, "");
+
+void enttype(char *type, int *numargs)
+{
+    if(*numargs >= 1)
+    {
+        int typeidx = findtype(type);        
+        if(typeidx != ET_EMPTY) groupedit(e.type = typeidx);
+    }    
+    else entfocus(efocus,
+    {
+        result(entities::entname(e.type));
+    })
+}
+
+void entattr(int *attr, int *val, int *numargs)
+{
+    if(*numargs >= 2)
+    {
+        if(*attr >= 0 && *attr <= 4)
+            groupedit(
+                switch(*attr)
+                {
+                    case 0: e.attr1 = *val; break;
+                    case 1: e.attr2 = *val; break;
+                    case 2: e.attr3 = *val; break;
+                    case 3: e.attr4 = *val; break;
+                    case 4: e.attr5 = *val; break;
+                }
+            );        
+    }
+    else entfocus(efocus,
+    {
+        switch(*attr)
+        {
+            case 0: intret(e.attr1); break;
+            case 1: intret(e.attr2); break;
+            case 2: intret(e.attr3); break;
+            case 3: intret(e.attr4); break;
+            case 4: intret(e.attr5); break;
+        }
+    });
+}
+
+COMMAND(enttype, "sN");
+COMMAND(entattr, "iiN");
 
 int findentity(int type, int index, int attr1, int attr2)
 {
@@ -1089,9 +1155,7 @@ void resetmap()
     clearsleep();
     cancelsel();
     pruneundos();
-
-    setvar("gamespeed", 100, false);
-    setvar("paused", 0, false);
+    clearmapcrc();
 
     entities::clearents();
     outsideents.setsize(0);
@@ -1126,12 +1190,12 @@ bool emptymap(int scale, bool force, const char *mname, bool usecfg)    // main 
 
     if(usecfg)
     {
-        overrideidents = true;
+        identflags |= IDF_OVERRIDDEN;
         execfile("data/default_map_settings.cfg", false);
-        overrideidents = false;
+        identflags &= ~IDF_OVERRIDDEN;
     }
 
-    clearlights();
+    initlights();
     allchanged(true);
 
     startmap(mname);
@@ -1208,7 +1272,7 @@ void shrinkmap()
     conoutf("shrunk map to size %d", worldscale);
 }
 
-void newmap(int *i) { bool force = !isconnected() && !haslocalclients(); if(force) game::forceedit(""); if(emptymap(*i, force, NULL)) game::newmap(max(*i, 0)); }
+void newmap(int *i) { bool force = !isconnected(); if(force) game::forceedit(""); if(emptymap(*i, force, NULL)) game::newmap(max(*i, 0)); }
 void mapenlarge() { if(enlargemap(false)) game::newmap(-1); }
 COMMAND(newmap, "i");
 COMMAND(mapenlarge, "");
@@ -1224,17 +1288,17 @@ COMMAND(mapname, "");
 void mpeditent(int i, const vec &o, int type, int attr1, int attr2, int attr3, int attr4, int attr5, bool local)
 {
     if(i < 0 || i >= MAXENTS) return;
-    if(entities::getents().length()<=i)
+    vector<extentity *> &ents = entities::getents();
+    if(ents.length()<=i)
     {
-        while(entities::getents().length()<i) entities::getents().add(entities::newentity())->type = ET_EMPTY;
-        extentity *e = newentity(local, o, type, attr1, attr2, attr3, attr4, attr5);
-        entities::getents().add(e);
+        extentity *e = newentity(local, o, type, attr1, attr2, attr3, attr4, attr5, i);
+        if(!e) return;
         addentity(i);
         attachentity(*e);
     }
     else
     {
-        extentity &e = *entities::getents()[i];
+        extentity &e = *ents[i];
         removeentity(i);
         int oldtype = e.type;
         if(oldtype!=type) detachentity(e);

@@ -32,6 +32,12 @@
 <a href="#say"><tt>say</tt></a>
 </li>
 <li>
+<a href="#ignore"><tt>ignore</tt></a>
+</li>
+<li>
+<a href="#unignore"><tt>unignore</tt></a>
+</li>
+<li>
 <a href="#echo"><tt>echo</tt></a>
 </li>
 <li>
@@ -265,6 +271,16 @@ Determines who are your teammates in any team game mode (truncated to 4 characte
 Outputs text to all players, as if you typed it.
 </p>
 
+<pre id="ignore">ignore N</pre>
+<p>
+Ignores all chat messages from player N, where N is either the player's name or client number.
+</p>
+
+<pre id="unignore">unignore N</pre>
+<p>
+Stops ignoring chat messages from player N, where N is either the player's name or client number.
+</p>
+
 <pre id="echo">echo text...</pre>
 <p>
 Outputs text to the console.  Most useful for scripts.
@@ -297,7 +313,7 @@ Reconnects to the server which you were last connected to. You can optionally sp
 
 <pre id="rate">rate N</pre>
 <p>
-Sets your clients maximum downstream bandwidth to N bytes per second. Leaving it at 0 (the default) means the server will dynamically try to do the best thing, this is recommended for players who don't have a clue what their bandwidth is (setting your rate unoptimally is worse than not setting it all). Modem players (56k) could try rate 4000 and tweak from there, dsl players can try rate 6000-10000. Note that the more players on a server, the more critical the effect of your rate.
+Sets your clients maximum downstream bandwidth to N kilobytes per second. Leaving it at 0 (the default) means the server will dynamically try to do the best thing, this is recommended for players who don't have a clue what their bandwidth is (setting your rate unoptimally is worse than not setting it all). Modem players (56k) could try rate 4 and tweak from there, dsl players can try rate 6-10. Note that the more players on a server, the more critical the effect of your rate.
 </p>
 
 <pre id="showscores">showscores</pre>
@@ -372,15 +388,18 @@ Set gameplay mode to N for the next game played (next map load). N can be:
 <li>14: insta protect mode. Like protect mode above, but with weapons, health, and items as in instagib mode.</li>
 <li>15: hold mode. Hold the flag for a time to score points.</li>
 <li>16: insta hold mode. Like hold mode above, but with weapons, health, and items as in instagib mode.</li>
-<li>17: efficiency ctf. Capture the flag as above, but with weapons, health, and items as in efficiency mode.</li>
-<li>18: efficiency protect.  Like protect mode above, but with weapons, health, and items as in efficiency mode.</li>
-<li>19: efficiency hold.  Like hold mode above, but with weapons, health, and items as in efficiency mode.</li>
+<li>17: efficiency ctf mode. Capture the flag as above, but with weapons, health, and items as in efficiency mode.</li>
+<li>18: efficiency protect mode.  Like protect mode above, but with weapons, health, and items as in efficiency mode.</li>
+<li>19: efficiency hold mode.  Like hold mode above, but with weapons, health, and items as in efficiency mode.</li>
+<li>20: collect mode. Frag the enemy team to drop skulls. Collect them and bring them to the enemy base for points.<li>
+<li>21: insta collect mode. Like collect mode above, but with weapons, health, and items as in instagib mode.</li>
+<li>22: efficiency collect mode. Like collect mode above, but with weapons, health, and items as in efficiency mode.</li>
 <li>-1: demo playback mode, see demo recording section below.</li>
 <li>-2, -3: single player, see single player mode section below.</li>
 </ul>
 
 <p>
-Frag counting is the same for all modes: 1 for a frag, -1 for a suicide or a teamkill. Timelimit for all games is 10 minutes, or 15 minutes for teamplay, and no timelimit for mode 1 (and mode 0 in a local game).
+Frag counting is the same for all modes: 1 for a frag, -1 for a suicide or a teamkill. Timelimit for all game modes is 10 minutes, except for coop-edit mode where there is no limit.
 </p>
 
 <pre id="skill">skill N</pre>
@@ -491,7 +510,7 @@ There are initially 7 weapons:
 <td>0</td>
 <td>fist</td>
 <td>50</td>
-<td>0.25sec</td>
+<td>0.25s</td>
 <td>200</td>
 <td>quake3 gauntlet</td>
 </tr>
@@ -500,7 +519,7 @@ There are initially 7 weapons:
 <td>shotgun</td>
 <td>
 20x10</td>
-<td>1.4sec</td>
+<td>1.4s</td>
 <td>143</td>
 <td>doom2 SSG (wide angle, but less than in doom2)</td>
 </tr>
@@ -508,7 +527,7 @@ There are initially 7 weapons:
 <td>2</td>
 <td>chaingun</td>
 <td>30</td>
-<td>0.1sec</td>
+<td>0.1s</td>
 <td>300</td>
 <td>quake LG (mild spread at distance)</td>
 </tr>
@@ -516,7 +535,7 @@ There are initially 7 weapons:
 <td>3</td>
 <td>rocket launcher</td>
 <td>120</td>
-<td>0.8sec</td>
+<td>0.8s</td>
 <td>150</td>
 <td>quake RL (splash damage)</td>
 </tr>
@@ -524,7 +543,7 @@ There are initially 7 weapons:
 <td>4</td>
 <td>rifle</td>
 <td>100</td>
-<td>1.5sec</td>
+<td>1.5s</td>
 <td>66</td>
 <td>quake2 RG</td>
 </tr>
@@ -534,11 +553,11 @@ There are initially 7 weapons:
 <td>
 grenade launcher</td>
 <td>
-75</td>
+90</td>
 <td>
-0.5sec</td>
+0.6s</td>
 <td>
-100</td>
+150</td>
 <td>
 any quake GL, except faster but less damaging</td>
 </tr>
@@ -546,11 +565,11 @@ any quake GL, except faster but less damaging</td>
 <td>6</td>
 <td> pistol</td>
 <td>
-25</td>
+35</td>
 <td>
-0.5</td>
+0.5s</td>
 <td>
-50</td>
+70</td>
 <td>
 quake SG, but more precise</td>
 </tr>
@@ -567,9 +586,9 @@ Items that can be picked up:
 <ul>
 <li>6 types of ammo (10 shells, 5 rockets, 20 bullets, 5 rifle rounds, 10 grenades, 30 pistol ammo) (to a max of 30/15/60/15/30/120, respawn 12/9/6 seconds)</li>
 <li>health (adds 25 to a max of MAXHEALTH (initially 100), respawn 20/15/10 seconds)</li>
-<li>health boost (adds 10 to your MAXHEALTH until the end of the current map, respawn 60 seconds)</li><li>light armour (100, absorbs 40% of damage, respawn 20 seconds)</li>
-<li>heavy armour (200, absorbs 60% of damage, respawn 20 seconds)</li>
-<li>quad powerup (4x damage for 20 seconds, respawn 60 seconds)</li>
+<li>health boost (adds 10 to your MAXHEALTH until the end of the current map, respawn 60 seconds)</li><li>light armour (100, absorbs 50% of damage, respawn 20 seconds)</li>
+<li>heavy armour (200, absorbs 75% of damage, respawn 30 seconds)</li>
+<li>quad powerup (4x damage for 20 seconds, respawn 70 seconds)</li>
 </ul>
 
 <p>
@@ -641,7 +660,7 @@ spawning will be preferred at bases which are not currently being captured by an
 </p>
 
 <p>
-If a player dies, they wait M seconds before they can respawn again (M = 10 or so).
+If a player dies, they wait 5 seconds before they can respawn again.
 If you have no bases left (the enemy has captured yours, or at least made em neutral)
 you will spawn at random spawnpoints. 
 </p>
@@ -660,10 +679,8 @@ your score is the same as the team's score.
 
 <p>
 When you spawn, you are given a certain amount of ammo for randomly 2 weapons out of the
-5 main ones, + pistol ammo. You will not be able to get more ammo unless it is placed in
-the map, or if given to you by another player. Any other player can replenish your ammo
-of types of ammo he doesn't have. I.e. if you have RL/MG and he has GL/MG, you can replenish
-his GL ammo, and he can give you RL ammo.
+5 main ones, + pistol ammo. Ammo will periodically spawn at bases owned by a given team which
+can be collected by only that team.
 </p>
 
 <p>

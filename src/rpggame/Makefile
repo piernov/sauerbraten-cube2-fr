@@ -1,5 +1,5 @@
 CXXFLAGS= -Os
-override CXXFLAGS+= -Wall -fsigned-char
+override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
 PLATFORM= $(shell uname -s)
 PLATFORM_PREFIX= native
@@ -17,11 +17,27 @@ MV=mv
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 WINDRES= windres
+ifneq (,$(findstring 64,$(PLATFORM)))
+WINLIB=lib64
+WINBIN=../bin64
+override CXX+= -m64
+override WINDRES+= -F pe-x86-64
+else
+WINLIB=lib
+WINBIN=../bin
+override CXX+= -m32
+override WINDRES+= -F pe-i386
+endif
 CLIENT_INCLUDES= $(INCLUDES) -I../include
-CLIENT_LIBS= -mwindows -L../lib -lSDL -lSDL_image -lSDL_mixer -lzdll -lopengl32 -lenet -lws2_32 -lwinmm
+ifneq (,$(findstring TDM,$(PLATFORM)))
+STD_LIBS=
+else
+STD_LIBS= -static-libgcc -static-libstdc++
+endif
+CLIENT_LIBS= -mwindows $(STD_LIBS) -L../$(WINBIN) -L../$(WINLIB) -lSDL -lSDL_image -lSDL_mixer -lzlib1 -lopengl32 -lenet -lws2_32 -lwinmm
 else	
 CLIENT_INCLUDES= $(INCLUDES) -I/usr/X11R6/include `sdl-config --cflags`
-CLIENT_LIBS= -L../enet/.libs -lenet -L/usr/X11R6/lib `sdl-config --libs` -lSDL_image -lSDL_mixer -lz -lGL
+CLIENT_LIBS= -L../enet/.libs -lenet -L/usr/X11R6/lib -lX11 `sdl-config --libs` -lSDL_image -lSDL_mixer -lz -lGL
 endif
 ifeq ($(PLATFORM),Linux)
 CLIENT_LIBS+= -lrt
@@ -74,9 +90,7 @@ CLIENT_OBJS= \
 	../rpggame/entities.o \
 	../rpggame/objset.o \
 	../rpggame/rpg.o
-ifneq (,$(findstring MINGW,$(PLATFORM)))
-CLIENT_OBJS+= ../vcpp/SDL_win32_main.o
-endif
+
 CLIENT_PCH= ../shared/cube.h.gch ../engine.h.gch ../rpggame/rpg.h.gch
 
 ifeq ($(PLATFORM),SunOS)
@@ -109,12 +123,9 @@ $(filter ../engine/%,$(CLIENT_OBJS)): $(filter ../engine/%,$(CLIENT_PCH))
 $(filter ../rpggame/%,$(CLIENT_OBJS)): $(filter ../rpggame/%,$(CLIENT_PCH))
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
-../vcpp/%.o:
-	$(CXX) $(CXXFLAGS) -c -o $@ $(subst .o,.c,$@) 
-
 client: $(CLIENT_OBJS)
 	$(WINDRES) -I ../vcpp -i ../vcpp/mingw.rc -J rc -o ../vcpp/mingw.res -O coff 
-	$(CXX) $(CXXFLAGS) -o ../../bin/rpg.exe ../vcpp/mingw.res $(CLIENT_OBJS) $(CLIENT_LIBS)
+	$(CXX) $(CXXFLAGS) -o ../$(WINBIN)/rpg.exe ../vcpp/mingw.res $(CLIENT_OBJS) $(CLIENT_LIBS)
 ifneq (,$(STRIP))
 	$(STRIP) ../../bin/rpg.exe
 endif

@@ -17,6 +17,9 @@
 <div class="contents">
 <ul class="contents">
 <li>
+<a href="#_2013_01_04_collect_edition"><b>2013_01_04_collect_edition</b></a>
+</li>
+<li>
 <a href="#_2010_07_19_justice_edition"><b>2010_07_19_justice_edition</b></a>
 </li>
 <li>
@@ -180,8 +183,63 @@
 </ul>
 </div>
 
+<h2 id="_2013_01_04_collect_edition">2013_01_04_collect_edition</h2>
 <ul>
+<li>reanimated Ogro (by Geartrooper) with skeletal animation so he supports vweps and ragdolls</li>
+<li>added new MP maps by 4t3one &amp; Snowy (collusion), viruz (subterra), Windecker (alithia), miscreant (turbulence), Suicizer (evilness), sinsch (catch22), flubz0r (hidden), Skur (skrdm1), SuperMan (bvdm_01), Fatum (tumwalk, snapper_rocks, bad_moon, shiva, elegy), Meister &amp; Fatum (mill, asgard, legazzo, teahupoo, gubo), rabe (outpost), Doko &amp; MisanthropX &amp; Nieb (renegade), Nieb &amp; RaZgRiZ &amp; SirAlex &amp; Windecker (garden), Chris_0076 &amp; Nieb &amp; SomeDude (hashi), t-chen (simplicity, fury, mbt4, mbt9, arbana, haste, forgotten), t-chen &amp; RaZgRiZ (mbt12), RaZgRiZ (twinforts), cm|CubicMatter (kopenhagen), Nieb (autumn), ac &amp; Boxx &amp; HeWho (depot), HeWho (rm5), Sprite &amp; Crap_I'm_Dead (spcr), Crap_I'm_Dead (dirtndust), Maycrus &amp; AtlasSteal &amp; HeWho &amp; Somedude &amp; Chris (masdm), Star (sauerstruck), b4lkLu &amp; Chris_0076 (donya), Majikal (siberia), Ardelico &amp; HeWho &amp; Suicizer (force), Snowy (nucleus), Zeronic &amp; HeWho &amp; Cooper (eternal_valley) </li>
+<li>added "collect", "insta collect", and "efficiency collect" game modes</li>
+<li>new weapon sounds by Slawomir 'Q009' Blauciak</li>
+<li>added support for directional sunlight for lightmaps (controlled via "sunlight", "sunlightyaw", "sunlightpitch", and "sunlightscale" vars)</li>
+<li>added "savebrush" and "pastebrush" commands for saving and pasting selected geometry</li>
+<li>added support for up to 4 types of water, lava, and glass materials (using "water2", "lava3", etc. materials)</li>
+<li>added geometry filter modes for "editmat" command ("empty", "notempty", "solid", and "notsolid")</li>
+<li>now uses GLSL as the default rendering path when available (use "forceglsl 0" to use the old assembly shader path if necessary)</li> 
+<li>added support for international character sets</li>
+<li>added support for 64-bit Windows builds</li>
+<li>config files and maps are now saved to the My Games directory on Windows</li>
+<li>added auto-update and auto-sort options to the server browser</li>
+<li>made server browser stay open on connect failure</li>
+<li>server browser now displays time remaining for the match on servers</li>
+<li>server now shows up as a system tray icon on Windows</li>
+<li>server now loads entities directly from maps if available</li>
+<li>server may now have multiple masters, auths, and admins at the same time</li>
+<li>server now controls its own map rotation</li>
+<li>server now supports configurable teamkill limits</li>
+<li>increased pistol and grenade damage, and lengthened yellow armour spawn time</li>
+<li>health boost and quad spawn times are no longer randomized</li>
+<li>shortened game times to 10 minutes in all team modes</li>
+<li>players now spawn with blue armour again in FFA</li>
+<li>teammates are now shown on minimap</li>
+<li>team frags are now tracked independently of player frags</li>
+<li>in CTF the same player that dropped a flag may now pick it back up one time, but not twice in a row without a teammate picking it up in between</li>
+<li>teamkilling the flag runner in CTF modes now disallows the teamkiller from picking up the flag (toggled via "ctftkpenalty" var in server-init.cfg)</li>
+<li>team damage no longer contributes to accuracy</li>
+<li>gamehud and edithud may now span multiple lines</li>
+<li>added "hidedead" var to control whether players disappear immediately once killed</li>
+<li>added "restrictpausegame" var for controlling whether need to be admin to use pausegame during multiplayer</li>
+<li>added "restrictdemos" var for controlling whether need to be admin to record a demo and "maxdemos"/"maxdemosize" vars for limiting the number and size of demos</li>
+<li>movie recorder now supports larger than 1 GB files using OpenDML/AVI 2.0</li>
+<li>added "ignore" and "unignore" commands to locally ignore chat from players</li>
+<li>added "-g" command-line option which sets which file console output is logged to</li>
+<li>added support for DDS DXT1/3/5 compressed skyboxes and envmaps</li>
+<li>added simplified IK for pitch animation</li>
+<li>added support for applying transforms to bone tags on skeletal models</li>
+<li>revised internal geometry format to support merging cube faces into convex triangle fans instead of just rectangles</li>
+<li>use premultiplied-alpha for grass textures to avoid darkening around grass outlines</li>
+<li>improved model lighting that preserves contrast on unlit side</li>
+<li>added cubescript recursion limits</li>
+<li>added "local" command to cubescript that allows you to declare local variables</li>
+<li>added cubescript compiler</li>
+<li>added snow particles (particle type 13)</li>
+<li>"lightthreads" and "pvsthreads" vars now default to the estimated number of CPUs when set to 0</li>
+<li>fixed lightmap blurring (controlled via "blurlms" var) at lightmap borders</li>
+<li>normals are now sampled at all t-joints for smoothing rather than speculatively subdividing edges</li>
+<li>improved packing of lightmaps when a cube face has more than one plane</li>
+<li>added "guispring" for creating springs inside a list</li>
+</ul>
+
 <h2 id="_2010_07_19_justice_edition">2010_07_19_justice_edition</h2>
+<ul>
 <li>added new player models Inky and Captain Cannon by Geartrooper</li>
 <li>added new MP maps by t-chen &amp; MisanthropX (tempest), MisanthropX &amp; Finn &amp; t-chen (xenon), mIscreant (mercury), Nieb &amp; Geartrooper (justice), Blindabuser &amp; PainKillAH (fc5), KI113R &amp; Redon &amp; SkiingPenguins (alloy), TomekGNO (ruine), Kretren (core_refuge), KaiserTodretter (infamy, desecration), Nieb (bt_falls), viruz (abbey, tortuga), Jonlimle &amp; Argh! &amp; Nieb (injustice), Jonlimle &amp; Nieb &amp; Razgriz (curvy_castle), Nieb &amp; Jonlimle (authentic), t-chen (duel7, duel8, mbt1, mbt2, mbt10, caribbean), MisanthropX &amp; t-chen &amp; Nieb (industry), Fatum (nitro), Vincent (suburb), BlikjeBier (akaritori), Nieb &amp; Destroyer &amp; MisanthropX &amp; viruz (park), KaZ (dune), Justin (pitch_black), and Meister (osiris)</li>
 <li>added trak5 texture set by TRaK</li>
@@ -256,7 +314,7 @@
 <li>pickups now show up immediately when added in edit mode</li>
 
 <li>added support for optional hit sound (toggle with "hitsound" var)</li>
-<li>added configurable mini-console for chat (configurable via "minconsize", "minconwidth", "minconfilter", and "minconfade" vars)</li>
+<li>added configurable mini-console for chat (configurable via "miniconsize", "miniconwidth", "miniconfilter", and "miniconfade" vars)</li>
 <li>made key-binding menu easier to use</li>
 <li>extended damage compass to 8 directions (from 4)</li>
 <li>added ammo inventory display to HUD</li>

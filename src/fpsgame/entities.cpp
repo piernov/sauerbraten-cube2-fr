@@ -4,6 +4,40 @@ namespace entities
 {
     using namespace game;
 
+    int extraentinfosize() { return 0; }       // size in bytes of what the 2 methods below read/write... so it can be skipped by other games
+
+    void writeent(entity &e, char *buf)   // write any additional data to disk (except for ET_ ents)
+    {
+    }
+
+    void readent(entity &e, char *buf, int ver)     // read from disk, and init
+    {
+        if(ver <= 30) switch(e.type)
+        {
+            case FLAG:
+            case MONSTER:
+            case TELEDEST:
+            case RESPAWNPOINT:
+            case BOX:
+            case BARREL:
+            case PLATFORM:
+            case ELEVATOR:
+                e.attr1 = (int(e.attr1)+180)%360;
+                break;
+        }
+        if(ver <= 31) switch(e.type)
+        {
+            case BOX:
+            case BARREL:
+            case PLATFORM:
+            case ELEVATOR:
+                int yaw = (int(e.attr1)%360 + 360)%360 + 7; 
+                e.attr1 = yaw - yaw%15;
+                break;
+        }
+    }
+
+#ifndef STANDALONE
     vector<extentity *> ents;
 
     vector<extentity *> &getents() { return ents; }
@@ -73,6 +107,18 @@ namespace entities
             if(!mdl) continue;
             preloadmodel(mdl);
         }
+        loopv(ents)
+        {
+            extentity &e = *ents[i];
+            switch(e.type)
+            {
+                case TELEPORT:
+                    if(e.attr2 > 0) preloadmodel(mapmodelname(e.attr2));
+                case JUMPPAD:
+                    if(e.attr4 > 0) preloadmapsound(e.attr4);
+                    break;
+            }
+        }
     }
 
     void renderentities()
@@ -132,18 +178,18 @@ namespace entities
             //particle_text(d->abovehead(), is.name, PART_TEXT, 2000, 0xFFC864, 4.0f, -8);
             particle_icon(d->abovehead(), is.icon%4, is.icon/4, PART_HUD_ICON_GREY, 2000, 0xFFFFFF, 2.0f, -8);
         }
-        playsound(itemstats[type-I_SHELLS].sound, d!=player1 ? &d->o : NULL, NULL, 0, 0, -1, 0, 1500);
+        playsound(itemstats[type-I_SHELLS].sound, d!=player1 ? &d->o : NULL, NULL, 0, 0, 0, -1, 0, 1500);
         d->pickup(type);
         if(d==player1) switch(type)
         {
             case I_BOOST:
                 conoutf(CON_GAMEINFO, "\f2you have a permanent +10 health bonus! (%d)", d->maxhealth);
-                playsound(S_V_BOOST, NULL, NULL, 0, 0, -1, 0, 3000);
+                playsound(S_V_BOOST, NULL, NULL, 0, 0, 0, -1, 0, 3000);
                 break;
 
             case I_QUAD:
                 conoutf(CON_GAMEINFO, "\f2you got the quad!");
-                playsound(S_V_QUAD, NULL, NULL, 0, 0, -1, 0, 3000);
+                playsound(S_V_QUAD, NULL, NULL, 0, 0, 0, -1, 0, 3000);
                 break;
         }
     }
@@ -152,11 +198,20 @@ namespace entities
 
     void teleporteffects(fpsent *d, int tp, int td, bool local)
     {
-        if(d == player1) playsound(S_TELEPORT);
-        else
+        if(ents.inrange(tp) && ents[tp]->type == TELEPORT)
         {
-            if(ents.inrange(tp)) playsound(S_TELEPORT, &ents[tp]->o);
-            if(ents.inrange(td)) playsound(S_TELEPORT, &ents[td]->o);
+            extentity &e = *ents[tp];
+            if(e.attr4 >= 0) 
+            {
+                int snd = S_TELEPORT, flags = 0;
+                if(e.attr4 > 0) { snd = e.attr4; flags = SND_MAP; }
+                if(d == player1) playsound(snd, NULL, NULL, flags);
+                else
+                {
+                    playsound(snd, &e.o, NULL, flags);
+                    if(ents.inrange(td) && ents[td]->type == TELEDEST) playsound(snd, &ents[td]->o, NULL, flags);
+                }
+            }
         }
         if(local && d->clientnum >= 0)
         {
@@ -173,8 +228,17 @@ namespace entities
 
     void jumppadeffects(fpsent *d, int jp, bool local)
     {
-        if(d == player1) playsound(S_JUMPPAD);
-        else if(ents.inrange(jp)) playsound(S_JUMPPAD, &ents[jp]->o);
+        if(ents.inrange(jp) && ents[jp]->type == JUMPPAD)
+        {
+            extentity &e = *ents[jp];
+            if(e.attr4 >= 0)
+            {
+                int snd = S_JUMPPAD, flags = 0;
+                if(e.attr4 > 0) { snd = e.attr4; flags = SND_MAP; }
+                if(d == player1) playsound(snd, NULL, NULL, flags);
+                else playsound(snd, &e.o, NULL, flags);
+            }
+        }
         if(local && d->clientnum >= 0)
         {
             sendposition(d);
@@ -341,7 +405,7 @@ namespace entities
 
     static const int triggertypes[NUMTRIGGERTYPES] =
     {
-        0,
+        -1,
         TRIG_ONCE,                    // 1
         TRIG_RUMBLE,                  // 2
         TRIG_TOGGLE,                  // 3
@@ -356,26 +420,26 @@ namespace entities
         TRIG_DISAPPEAR,               // 12
         TRIG_DISAPPEAR | TRIG_RUMBLE, // 13
         TRIG_DISAPPEAR | TRIG_COLLIDE | TRIG_LOCKED, // 14
-        0 /* reserved 15 */,
-        0 /* reserved 16 */,
-        0 /* reserved 17 */,
-        0 /* reserved 18 */,
-        0 /* reserved 19 */,
-        0 /* reserved 20 */,
-        0 /* reserved 21 */,
-        0 /* reserved 22 */,
-        0 /* reserved 23 */,
-        0 /* reserved 24 */,
-        0 /* reserved 25 */,
-        0 /* reserved 26 */,
-        0 /* reserved 27 */,
-        0 /* reserved 28 */,
+        -1 /* reserved 15 */,
+        -1 /* reserved 16 */,
+        -1 /* reserved 17 */,
+        -1 /* reserved 18 */,
+        -1 /* reserved 19 */,
+        -1 /* reserved 20 */,
+        -1 /* reserved 21 */,
+        -1 /* reserved 22 */,
+        -1 /* reserved 23 */,
+        -1 /* reserved 24 */,
+        -1 /* reserved 25 */,
+        -1 /* reserved 26 */,
+        -1 /* reserved 27 */,
+        -1 /* reserved 28 */,
         TRIG_DISAPPEAR | TRIG_RUMBLE | TRIG_ENDSP, // 29
-        0 /* reserved 30 */,
-        0 /* reserved 31 */,
+        -1 /* reserved 30 */,
+        -1 /* reserved 31 */,
     };
 
-    #define validtrigger(type) (triggertypes[(type) & (NUMTRIGGERTYPES-1)]!=0)
+    #define validtrigger(type) (triggertypes[(type) & (NUMTRIGGERTYPES-1)]>=0)
     #define checktriggertype(type, flag) (triggertypes[(type) & (NUMTRIGGERTYPES-1)] & (flag))
 
     static inline void setuptriggerflags(fpsentity &e)
@@ -610,30 +674,6 @@ namespace entities
         return i>=0 && size_t(i)<sizeof(entnames)/sizeof(entnames[0]) ? entnames[i] : "";
     }
 
-    int extraentinfosize() { return 0; }       // size in bytes of what the 2 methods below read/write... so it can be skipped by other games
-
-    void writeent(entity &e, char *buf)   // write any additional data to disk (except for ET_ ents)
-    {
-    }
-
-    void readent(entity &e, char *buf)     // read from disk, and init
-    {
-        int ver = getmapversion();
-        if(ver <= 30) switch(e.type)
-        {
-            case FLAG:
-            case MONSTER:
-            case TELEDEST:
-            case RESPAWNPOINT:
-            case BOX:
-            case BARREL:
-            case PLATFORM:
-            case ELEVATOR:
-                e.attr1 = (int(e.attr1)+180)%360;
-                break;
-        }
-    }
-
     void editent(int i, bool local)
     {
         extentity &e = *ents[i];
@@ -653,5 +693,6 @@ namespace entities
         if(e.type==BASE || e.type==FLAG) return 0.0f;
         return 4.0f;
     }
+#endif
 }
 

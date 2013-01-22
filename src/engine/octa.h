@@ -1,13 +1,5 @@
 // 6-directional octree heightfield map format
 
-enum
-{
-    LAYER_TOP = 0,
-    LAYER_BOTTOM,
-
-    LAYER_BLEND = 1<<1
-};
-
 struct elementset
 {
     ushort texture, lmid, envmap;
@@ -32,12 +24,13 @@ struct materialsurface
 
     ivec o;
     ushort csize, rsize;
+    ushort material, skip;
+    uchar orient, flags;
     union
     {
         short index;
         short depth;
     };
-    uchar material, orient, flags;
     union
     {
         entity *light;
@@ -46,27 +39,54 @@ struct materialsurface
     };
 };
 
-struct surfaceinfo
+struct vertinfo
 {
-    uchar texcoords[8];
-    uchar w, h;
-    ushort x, y;
-    uchar lmid, layer;
+    ushort x, y, z, u, v, norm;
+
+    void setxyz(ushort a, ushort b, ushort c) { x = a; y = b; z = c; }
+    void setxyz(const ivec &v) { setxyz(v.x, v.y, v.z); }
+    void set(ushort a, ushort b, ushort c, ushort s = 0, ushort t = 0, ushort n = 0) { setxyz(a, b, c); u = s; v = t; norm = n; }
+    void set(const ivec &v, ushort s = 0, ushort t = 0, ushort n = 0) { set(v.x, v.y, v.z, s, t, n); }
+    ivec getxyz() const { return ivec(x, y, z); }
 };
 
-struct surfacenormals
+enum
 {
-    bvec normals[4];
+    LAYER_TOP    = (1<<5),
+    LAYER_BOTTOM = (1<<6),
+    LAYER_DUP    = (1<<7),
+
+    LAYER_BLEND  = LAYER_TOP|LAYER_BOTTOM,
+    
+    MAXFACEVERTS = 15
 };
+
+enum { LMID_AMBIENT = 0, LMID_AMBIENT1, LMID_BRIGHT, LMID_BRIGHT1, LMID_DARK, LMID_DARK1, LMID_RESERVED };
+
+struct surfaceinfo
+{
+    uchar lmid[2];
+    uchar verts, numverts;
+
+    int totalverts() const { return numverts&LAYER_DUP ? (numverts&MAXFACEVERTS)*2 : numverts&MAXFACEVERTS; }
+    bool used() const { return lmid[0] != LMID_AMBIENT || lmid[1] != LMID_AMBIENT || numverts&~LAYER_TOP; }
+    void clear() { lmid[0] = LMID_AMBIENT; lmid[1] = LMID_AMBIENT; numverts = (numverts&MAXFACEVERTS) | LAYER_TOP; }
+    void brighten() { lmid[0] = LMID_BRIGHT; lmid[1] = LMID_AMBIENT; numverts = (numverts&MAXFACEVERTS) | LAYER_TOP; }
+};
+
+static const surfaceinfo ambientsurface = {{LMID_AMBIENT, LMID_AMBIENT}, 0, LAYER_TOP};
+static const surfaceinfo brightsurface = {{LMID_BRIGHT, LMID_AMBIENT}, 0, LAYER_TOP};
+static const surfaceinfo brightbottomsurface = {{LMID_AMBIENT, LMID_BRIGHT}, 0, LAYER_BOTTOM};
 
 struct grasstri
 {
     vec v[4];
     int numv;
     vec4 tcu, tcv;
-    plane surface, e[4];
+    plane surface;
     vec center;
     float radius;
+    float minz, maxz;
     ushort texture, lmid;
 };
 
@@ -135,7 +155,7 @@ struct vtxarray
     occludequery *query;
     vector<octaentities *> mapmodels;
     vector<grasstri> grasstris;
-    int hasmerges;
+    int hasmerges, mergelevel;
     uint dynlightmask;
     bool shadowed;
 };
@@ -148,13 +168,15 @@ struct clipplanes
     plane p[12];
     uchar side[12];
     uchar size, visible;
-    cube *owner;
+    const cube *owner;
     int version;
 };
 
-struct mergeinfo
+struct facebounds
 {
     ushort u1, u2, v1, v2;
+
+    bool empty() const { return u1 >= u2 || v1 >= v2; }
 };
 
 struct tjoint
@@ -166,45 +188,34 @@ struct tjoint
 
 struct cubeext
 {
-    uchar material;          // empty-space material
-    uchar visible;           // visible faces of the cube
-    uchar merged;            // merged faces of the cube
-    uchar mergeorigin;       // whether this face describes a larger merged face
     vtxarray *va;            // vertex array for children, or NULL
-    clipplanes *clip;        // collision planes
-    surfaceinfo *surfaces;   // lighting info for each surface
-    surfacenormals *normals; // per-vertex normals for each surface
-    octaentities *ents;      // list of map entites totally inside cube
-    mergeinfo *merges;       // bounds of merged surfaces
+    octaentities *ents;      // map entities inside cube
+    surfaceinfo surfaces[6]; // render info for each surface
     int tjoints;             // linked list of t-joints
+    uchar maxverts;          // allocated space for verts
+
+    vertinfo *verts() { return (vertinfo *)(this+1); }
 };  
 
 struct cube
 {
     cube *children;          // points to 8 cube structures which are its children, or NULL. -Z first, then -Y, -X
+    cubeext *ext;            // extended info for the cube
     union
     {
         uchar edges[12];     // edges of the cube, each uchar is 2 4bit values denoting the range.
                              // see documentation jpgs for more info.
         uint faces[3];       // 4 edges of each dimension together representing 2 perpendicular faces
     };
+    ushort texture[6];       // one for each face. same order as orient.
+    ushort material;         // empty-space material
+    uchar merged;            // merged faces of the cube
     union
     {
-        ushort texture[6];       // one for each face. same order as orient.
-        struct
-        {
-            uchar clipmask, vismask;
-            uchar vismasks[8];
-        };
+        uchar escaped;       // mask of which children have escaped merges
+        uchar visible;       // visibility info for faces
     };
-    cubeext *ext;            // extended info for the cube
 };
-
-static inline cubeext &ext(cube &c)
-{
-    extern cubeext *newcubeext(cube &c);
-    return *(c.ext ? c.ext : newcubeext(c));
-}
 
 struct block3
 {
@@ -239,7 +250,7 @@ struct undoblock // undo header, all data sits in payload
 
 extern cube *worldroot;             // the world data. only a ptr to 8 cubes (ie: like cube.children above)
 extern int wtris, wverts, vtris, vverts, glde, gbatches, rplanes;
-extern int allocnodes, allocva, selchildcount;
+extern int allocnodes, allocva, selchildcount, selchildmat;
 
 const uint F_EMPTY = 0;             // all edges in the range (0,0)
 const uint F_SOLID = 0x80808080;    // all edges in the range (0,8)
@@ -288,4 +299,33 @@ enum
     PVS_PART_VISIBLE,
     PVS_FOGGED
 };
+
+#define GENCUBEVERTS(x0,x1, y0,y1, z0,z1) \
+    GENCUBEVERT(0, x1, y1, z0) \
+    GENCUBEVERT(1, x0, y1, z0) \
+    GENCUBEVERT(2, x0, y1, z1) \
+    GENCUBEVERT(3, x1, y1, z1) \
+    GENCUBEVERT(4, x1, y0, z1) \
+    GENCUBEVERT(5, x0, y0, z1) \
+    GENCUBEVERT(6, x0, y0, z0) \
+    GENCUBEVERT(7, x1, y0, z0)
+
+#define GENFACEVERTX(o,n, x,y,z, xv,yv,zv) GENFACEVERT(o,n, x,y,z, xv,yv,zv)
+#define GENFACEVERTSX(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEORIENT(0, GENFACEVERTX(0,0, x0,y1,z1, d0,r1,c1), GENFACEVERTX(0,1, x0,y1,z0, d0,r1,c0), GENFACEVERTX(0,2, x0,y0,z0, d0,r0,c0), GENFACEVERTX(0,3, x0,y0,z1, d0,r0,c1)) \
+    GENFACEORIENT(1, GENFACEVERTX(1,0, x1,y1,z1, d1,r1,c1), GENFACEVERTX(1,1, x1,y0,z1, d1,r0,c1), GENFACEVERTX(1,2, x1,y0,z0, d1,r0,c0), GENFACEVERTX(1,3, x1,y1,z0, d1,r1,c0))
+#define GENFACEVERTY(o,n, x,y,z, xv,yv,zv) GENFACEVERT(o,n, x,y,z, xv,yv,zv)
+#define GENFACEVERTSY(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEORIENT(2, GENFACEVERTY(2,0, x1,y0,z1, c1,d0,r1), GENFACEVERTY(2,1, x0,y0,z1, c0,d0,r1), GENFACEVERTY(2,2, x0,y0,z0, c0,d0,r0), GENFACEVERTY(2,3, x1,y0,z0, c1,d0,r0)) \
+    GENFACEORIENT(3, GENFACEVERTY(3,0, x0,y1,z0, c0,d1,r0), GENFACEVERTY(3,1, x0,y1,z1, c0,d1,r1), GENFACEVERTY(3,2, x1,y1,z1, c1,d1,r1), GENFACEVERTY(3,3, x1,y1,z0, c1,d1,r0))
+#define GENFACEVERTZ(o,n, x,y,z, xv,yv,zv) GENFACEVERT(o,n, x,y,z, xv,yv,zv)
+#define GENFACEVERTSZ(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEORIENT(4, GENFACEVERTZ(4,0, x0,y0,z0, r0,c0,d0), GENFACEVERTZ(4,1, x0,y1,z0, r0,c1,d0), GENFACEVERTZ(4,2, x1,y1,z0, r1,c1,d0), GENFACEVERTZ(4,3, x1,y0,z0, r1,c0,d0)) \
+    GENFACEORIENT(5, GENFACEVERTZ(5,0, x0,y0,z1, r0,c0,d1), GENFACEVERTZ(5,1, x1,y0,z1, r1,c0,d1), GENFACEVERTZ(5,2, x1,y1,z1, r1,c1,d1), GENFACEVERTZ(5,3, x0,y1,z1, r0,c1,d1))
+#define GENFACEVERTSXY(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEVERTSX(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEVERTSY(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1)
+#define GENFACEVERTS(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEVERTSXY(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1) \
+    GENFACEVERTSZ(x0,x1, y0,y1, z0,z1, c0,c1, r0,r1, d0,d1)
 

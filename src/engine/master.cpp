@@ -5,7 +5,7 @@
 #define INPUT_LIMIT 4096
 #define OUTPUT_LIMIT (64*1024)
 #define CLIENT_TIME (3*60*1000)
-#define AUTH_TIME (60*1000)
+#define AUTH_TIME (30*1000)
 #define AUTH_LIMIT 100
 #define AUTH_THROTTLE 1000
 #define CLIENT_LIMIT 8192
@@ -158,8 +158,9 @@ struct client
     enet_uint32 lastauth;
     vector<authreq> authreqs;
     bool shouldpurge;
+    bool registeredserver;
 
-    client() : message(NULL), inputpos(0), outputpos(0), servport(-1), lastauth(0), shouldpurge(false) {}
+    client() : message(NULL), inputpos(0), outputpos(0), servport(-1), lastauth(0), shouldpurge(false), registeredserver(false) {}
 };
 vector<client *> clients;
 
@@ -228,11 +229,12 @@ void outputf(client &c, const char *fmt, ...)
 
 ENetSocket pingsocket = ENET_SOCKET_NULL;
 
-bool setuppingsocket()
+bool setuppingsocket(ENetAddress *address)
 {
     if(pingsocket != ENET_SOCKET_NULL) return true;
     pingsocket = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
     if(pingsocket == ENET_SOCKET_NULL) return false;
+    if(address && enet_socket_bind(pingsocket, address) < 0) return false;
     enet_socket_set_option(pingsocket, ENET_SOCKOPT_NONBLOCK, 1);
     return true;
 }
@@ -256,7 +258,7 @@ void setupserver(int port, const char *ip = NULL)
         fatal("failed to create server socket");
     if(enet_socket_set_option(serversocket, ENET_SOCKOPT_NONBLOCK, 1)<0)
         fatal("failed to make server socket non-blocking");
-    if(!setuppingsocket())
+    if(!setuppingsocket(&address))
         fatal("failed to create ping socket");
 
     enet_time_set(0);
@@ -388,6 +390,7 @@ void checkserverpongs()
                     client *c = findclient(s);
                     if(c)
                     {
+                        c->registeredserver = true;
                         outputf(*c, "succreg\n");
                         if(!c->message && gbanlists.length())
                         {
@@ -511,7 +514,7 @@ void reqauth(client &c, uint id, char *name)
     authreq &a = c.authreqs.add();
     a.reqtime = servtime;
     a.id = id;
-    uint seed[3] = { starttime, servtime, randomMT() };
+    uint seed[3] = { uint(starttime), servtime, randomMT() };
     static vector<char> buf;
     buf.setsize(0);
     a.answer = genchallenge(u->pubkey, seed, sizeof(seed), buf);
@@ -556,7 +559,7 @@ bool checkclientinput(client &c)
         int port;
         uint id;
         string user, val;
-        if(!strncmp(c.input, "list", 4) && (!c.input[4] || isspace(c.input[4])))
+        if(!strncmp(c.input, "list", 4) && (!c.input[4] || c.input[4] == '\n' || c.input[4] == '\r'))
         {
             genserverlist();
             if(gameserverlists.empty() || c.message) return false;
@@ -606,6 +609,7 @@ void checkclients()
     loopv(clients)
     {
         client &c = *clients[i];
+        if(c.authreqs.length()) purgeauths(c);
         if(c.message || c.output.length()) ENET_SOCKETSET_ADD(writeset, c.socket);
         else ENET_SOCKETSET_ADD(readset, c.socket);
         maxsock = max(maxsock, c.socket);
@@ -684,7 +688,7 @@ void checkclients()
             else { purgeclient(i--); continue; }
         }
         if(c.output.length() > OUTPUT_LIMIT) { purgeclient(i--); continue; }
-        if(ENET_TIME_DIFFERENCE(servtime, c.lastinput) >= CLIENT_TIME) { purgeclient(i--); continue; }
+        if(ENET_TIME_DIFFERENCE(servtime, c.lastinput) >= (c.registeredserver ? KEEPALIVE_TIME : CLIENT_TIME)) { purgeclient(i--); continue; }
     }
 }
 
@@ -716,7 +720,7 @@ int main(int argc, char **argv)
     path(cfgname);
     logfile = fopen(logname, "a");
     if(!logfile) logfile = stdout;
-    setvbuf(logfile, NULL, _IOLBF, 0);
+    setvbuf(logfile, NULL, _IOLBF, BUFSIZ);
 #ifndef WIN32
     signal(SIGUSR1, reloadsignal);
 #endif

@@ -1,28 +1,43 @@
 #import <Cocoa/Cocoa.h>
 
-#define MAXSTRLEN 260
-inline char *s_strncpy(char *d, const char *s, size_t m) { strncpy(d,s,m); d[m-1] = 0; return d; };
-inline char *s_strcat(char *d, const char *s) { size_t n = strlen(d); return s_strncpy(d+n,s,MAXSTRLEN-n); };
-
-void mac_pasteconsole(char *commandbuf)
+char *mac_pasteconsole(int *cblen)
 {	
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
     NSString *type = [pasteboard availableTypeFromArray:[NSArray arrayWithObject:NSStringPboardType]];
-    if (type != nil) {
+    if(type != nil) 
+    {
         NSString *contents = [pasteboard stringForType:type];
-        if (contents != nil)
-			s_strcat(commandbuf, [contents cStringUsingEncoding:NSASCIIStringEncoding]); // 10.4+
+        if(contents != nil)
+        {
+            int len = (int)[contents lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + 1; // 10.4+
+            if(len > 1)
+            {
+                char *buf = (char *)malloc(len);
+                if(buf)
+                {
+                    if([contents getCString:buf maxLength:len encoding:NSUTF8StringEncoding]) // 10.4+
+                    {
+                        *cblen = len;
+                        return buf;
+                    }
+                    free(buf);
+                }
+            }
+        }
     }
+    return NULL;
 }
 
 /*
- * 0x1040 = 10.4
- * 0x1050 = 10.5
- * 0x1060 = 10.6
+ * 0x0A0400 = 10.4
+ * 0x0A0500 = 10.5
+ * 0x0A0600 = 10.6
  */
 int mac_osversion() 
 {
-    SInt32 MacVersion;
-    Gestalt(gestaltSystemVersion, &MacVersion);
-    return MacVersion;
+    SInt32 majorVersion = 0, minorVersion = 0, bugVersion = 0;
+    Gestalt(gestaltSystemVersionMajor, &majorVersion);
+    Gestalt(gestaltSystemVersionMinor, &minorVersion);
+    Gestalt(gestaltSystemVersionBugFix, &bugVersion);
+    return (majorVersion<<16) | (minorVersion<<8) | bugVersion;
 }

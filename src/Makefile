@@ -1,5 +1,5 @@
 CXXFLAGS= -O3 -fomit-frame-pointer
-override CXXFLAGS+= -Wall -fsigned-char
+override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
 PLATFORM= $(shell uname -s)
 PLATFORM_PREFIX= native
@@ -16,13 +16,28 @@ endif
 MV=mv
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
-override CXXFLAGS+= -O2
 WINDRES= windres
+ifneq (,$(findstring 64,$(PLATFORM)))
+WINLIB=lib64
+WINBIN=../bin64
+override CXX+= -m64
+override WINDRES+= -F pe-x86-64
+else
+WINLIB=lib
+WINBIN=../bin
+override CXX+= -m32
+override WINDRES+= -F pe-i386
+endif
 CLIENT_INCLUDES= $(INCLUDES) -Iinclude
-CLIENT_LIBS= -mwindows -Llib -lSDL -lSDL_image -lSDL_mixer -lzdll -lopengl32 -lenet -lws2_32 -lwinmm
+ifneq (,$(findstring TDM,$(PLATFORM)))
+STD_LIBS=
+else
+STD_LIBS= -static-libgcc -static-libstdc++
+endif
+CLIENT_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lSDL -lSDL_image -lSDL_mixer -lzlib1 -lopengl32 -lenet -lws2_32 -lwinmm
 else	
 CLIENT_INCLUDES= $(INCLUDES) -I/usr/X11R6/include `sdl-config --cflags`
-CLIENT_LIBS= -Lenet/.libs -lenet -L/usr/X11R6/lib `sdl-config --libs` -lSDL_image -lSDL_mixer -lz -lGL -lX11
+CLIENT_LIBS= -Lenet/.libs -lenet -L/usr/X11R6/lib -lX11 `sdl-config --libs` -lSDL_image -lSDL_mixer -lz -lGL
 endif
 ifeq ($(PLATFORM),Linux)
 CLIENT_LIBS+= -lrt
@@ -82,17 +97,17 @@ CLIENT_OBJS= \
 	fpsgame/server.o \
 	fpsgame/waypoint.o \
 	fpsgame/weapon.o
-ifneq (,$(findstring MINGW,$(PLATFORM)))
-CLIENT_OBJS+= vcpp/SDL_win32_main.o
-endif
+
 CLIENT_PCH= shared/cube.h.gch engine/engine.h.gch fpsgame/game.h.gch
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES) -Iinclude
-SERVER_LIBS= -Llib -lzdll -lenet -lws2_32 -lwinmm
+SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
+MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
 else
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
 SERVER_LIBS= -Lenet/.libs -lenet -lz
+MASTER_LIBS= $(SERVER_LIBS)
 endif
 SERVER_OBJS= \
 	shared/crypto-standalone.o \
@@ -100,7 +115,10 @@ SERVER_OBJS= \
 	shared/tools-standalone.o \
 	engine/command-standalone.o \
 	engine/server-standalone.o \
+	engine/worldio-standalone.o \
+	fpsgame/entities-standalone.o \
 	fpsgame/server-standalone.o
+
 MASTER_OBJS= \
 	shared/crypto-standalone.o \
 	shared/stream-standalone.o \
@@ -130,8 +148,8 @@ clean:
 	-$(RM) $(CLIENT_PCH) $(CLIENT_OBJS) $(SERVER_OBJS) $(MASTER_OBJS) sauer_client sauer_server sauer_master
 
 %.h.gch: %.h
-	$(CXX) $(CXXFLAGS) -o $@.tmp $(subst .h.gch,.h,$@)
-	$(MV) $@.tmp $@
+	$(CXX) $(CXXFLAGS) -o $(subst .h.gch,.tmp.h.gch,$@) $(subst .h.gch,.h,$@)
+	$(MV) $(subst .h.gch,.tmp.h.gch,$@) $@
 
 %-standalone.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $(subst -standalone.o,.cpp,$@)
@@ -145,18 +163,16 @@ $(SERVER_OBJS): CXXFLAGS += $(SERVER_INCLUDES)
 $(filter-out $(SERVER_OBJS),$(MASTER_OBJS)): CXXFLAGS += $(SERVER_INCLUDES)
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
-vcpp/%.o:
-	$(CXX) $(CXXFLAGS) -c -o $@ $(subst .o,.c,$@) 
-
 client: $(CLIENT_OBJS)
 	$(WINDRES) -I vcpp -i vcpp/mingw.rc -J rc -o vcpp/mingw.res -O coff 
-	$(CXX) $(CXXFLAGS) -o ../bin/sauerbraten.exe vcpp/mingw.res $(CLIENT_OBJS) $(CLIENT_LIBS)
+	$(CXX) $(CXXFLAGS) -o $(WINBIN)/sauerbraten.exe vcpp/mingw.res $(CLIENT_OBJS) $(CLIENT_LIBS)
 
 server: $(SERVER_OBJS)
-	$(CXX) $(CXXFLAGS) -o ../bin/sauer_server.exe $(SERVER_OBJS) $(SERVER_LIBS)
+	$(WINDRES) -I vcpp -i vcpp/mingw.rc -J rc -o vcpp/mingw.res -O coff
+	$(CXX) $(CXXFLAGS) -o $(WINBIN)/sauer_server.exe vcpp/mingw.res $(SERVER_OBJS) $(SERVER_LIBS)
 
 master: $(MASTER_OBJS)
-	$(CXX) $(CXXFLAGS) -o ../bin/sauer_master.exe $(MASTER_OBJS) $(SERVER_LIBS)
+	$(CXX) $(CXXFLAGS) -o $(WINBIN)/sauer_master.exe $(MASTER_OBJS) $(MASTER_LIBS)
 
 install: all
 else
@@ -167,7 +183,13 @@ server:	libenet $(SERVER_OBJS)
 	$(CXX) $(CXXFLAGS) -o sauer_server $(SERVER_OBJS) $(SERVER_LIBS)  
 	
 master: libenet $(MASTER_OBJS)
-	$(CXX) $(CXXFLAGS) -o sauer_master $(MASTER_OBJS) $(SERVER_LIBS)  
+	$(CXX) $(CXXFLAGS) -o sauer_master $(MASTER_OBJS) $(MASTER_LIBS)  
+
+shared/cube2font.o: shared/cube2font.c
+	$(CXX) $(CXXFLAGS) -c -o $@ $< `freetype-config --cflags`
+
+cube2font: shared/cube2font.o
+	$(CXX) $(CXXFLAGS) -o cube2font shared/cube2font.o `freetype-config --libs` -lz
 
 install: all
 	cp sauer_client	../bin_unix/$(PLATFORM_PREFIX)_client
@@ -181,8 +203,11 @@ endif
 depend:
 	makedepend -Y -Ishared -Iengine -Ifpsgame $(subst .o,.cpp,$(CLIENT_OBJS))
 	makedepend -a -o.h.gch -Y -Ishared -Iengine -Ifpsgame $(subst .h.gch,.h,$(CLIENT_PCH))
-	makedepend -a -o-standalone.o -Y -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(SERVER_OBJS))
-	makedepend -a -o-standalone.o -Y -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(filter-out $(SERVER_OBJS), $(MASTER_OBJS)))
+	makedepend -a -o-standalone.o -Y -DSTANDALONE -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(SERVER_OBJS))
+	makedepend -a -o-standalone.o -Y -DSTANDALONE -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(filter-out $(SERVER_OBJS), $(MASTER_OBJS)))
+
+engine/engine.h.gch: shared/cube.h.gch
+fpsgame/game.h.gch: shared/cube.h.gch
 
 # DO NOT DELETE
 
@@ -386,6 +411,7 @@ fpsgame/ai.o: fpsgame/ai.h
 fpsgame/client.o: fpsgame/game.h shared/cube.h shared/tools.h shared/geom.h
 fpsgame/client.o: shared/ents.h shared/command.h shared/iengine.h
 fpsgame/client.o: shared/igame.h fpsgame/ai.h fpsgame/capture.h fpsgame/ctf.h
+fpsgame/client.o: fpsgame/collect.h
 fpsgame/entities.o: fpsgame/game.h shared/cube.h shared/tools.h shared/geom.h
 fpsgame/entities.o: shared/ents.h shared/command.h shared/iengine.h
 fpsgame/entities.o: shared/igame.h fpsgame/ai.h
@@ -407,7 +433,7 @@ fpsgame/scoreboard.o: shared/iengine.h shared/igame.h fpsgame/ai.h
 fpsgame/server.o: fpsgame/game.h shared/cube.h shared/tools.h shared/geom.h
 fpsgame/server.o: shared/ents.h shared/command.h shared/iengine.h
 fpsgame/server.o: shared/igame.h fpsgame/ai.h fpsgame/capture.h fpsgame/ctf.h
-fpsgame/server.o: fpsgame/extinfo.h fpsgame/aiman.h
+fpsgame/server.o: fpsgame/collect.h fpsgame/extinfo.h fpsgame/aiman.h
 fpsgame/waypoint.o: fpsgame/game.h shared/cube.h shared/tools.h shared/geom.h
 fpsgame/waypoint.o: shared/ents.h shared/command.h shared/iengine.h
 fpsgame/waypoint.o: shared/igame.h fpsgame/ai.h
@@ -438,18 +464,21 @@ shared/tools-standalone.o: shared/igame.h
 engine/command-standalone.o: engine/engine.h shared/cube.h shared/tools.h
 engine/command-standalone.o: shared/geom.h shared/ents.h shared/command.h
 engine/command-standalone.o: shared/iengine.h shared/igame.h engine/world.h
-engine/command-standalone.o: engine/octa.h engine/lightmap.h engine/bih.h
-engine/command-standalone.o: engine/texture.h engine/model.h engine/varray.h
 engine/server-standalone.o: engine/engine.h shared/cube.h shared/tools.h
 engine/server-standalone.o: shared/geom.h shared/ents.h shared/command.h
 engine/server-standalone.o: shared/iengine.h shared/igame.h engine/world.h
-engine/server-standalone.o: engine/octa.h engine/lightmap.h engine/bih.h
-engine/server-standalone.o: engine/texture.h engine/model.h engine/varray.h
+engine/worldio-standalone.o: engine/engine.h shared/cube.h shared/tools.h
+engine/worldio-standalone.o: shared/geom.h shared/ents.h shared/command.h
+engine/worldio-standalone.o: shared/iengine.h shared/igame.h engine/world.h
+fpsgame/entities-standalone.o: fpsgame/game.h shared/cube.h shared/tools.h
+fpsgame/entities-standalone.o: shared/geom.h shared/ents.h shared/command.h
+fpsgame/entities-standalone.o: shared/iengine.h shared/igame.h fpsgame/ai.h
 fpsgame/server-standalone.o: fpsgame/game.h shared/cube.h shared/tools.h
 fpsgame/server-standalone.o: shared/geom.h shared/ents.h shared/command.h
 fpsgame/server-standalone.o: shared/iengine.h shared/igame.h fpsgame/ai.h
 fpsgame/server-standalone.o: fpsgame/capture.h fpsgame/ctf.h
-fpsgame/server-standalone.o: fpsgame/extinfo.h fpsgame/aiman.h
+fpsgame/server-standalone.o: fpsgame/collect.h fpsgame/extinfo.h
+fpsgame/server-standalone.o: fpsgame/aiman.h
 
 engine/master-standalone.o: shared/cube.h shared/tools.h shared/geom.h
 engine/master-standalone.o: shared/ents.h shared/command.h shared/iengine.h
