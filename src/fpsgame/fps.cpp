@@ -457,7 +457,7 @@ namespace game
         {
             if(d==player1)
             {
-                conoutf(contype, "\f2you got fragged by %s (%s)", aname, guns[d->gunselect].name);
+                conoutf(contype, "\f2you got fragged by %s", aname);
                 playerniceshot = actor->clientnum;
             }
             else conoutf(contype, "\f2%s fragged %s", aname, dname);
