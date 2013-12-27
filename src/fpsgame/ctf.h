@@ -793,7 +793,7 @@ struct ctfclientmode : clientmode
         playsound(S_FLAGDROP);
         flagdrop = 1;
         if(isteam(player1->team, d->team)) flagplayer1 = -1;
-        if(!isteam(player1->team, d->team)) flagplayer2 = -1;
+        else flagplayer2 = -1;
     }
 
     void flagexplosion(int i, int team, const vec &loc)
@@ -900,7 +900,7 @@ struct ctfclientmode : clientmode
         if(score >= FLAGLIMIT) conoutf(CON_GAMEINFO, "%s captured %d flags", teamcolor("your team", ctfflagteam(team), "the enemy team"), score);
         flagdrop = 0;
         if(isteam(player1->team, d->team)) flagplayer1 = -1;
-        if(!isteam(player1->team, d->team)) flagplayer2 = -1;
+        else flagplayer2 = -1;
     }
 
     void takeflag(fpsent *d, int i, int version)

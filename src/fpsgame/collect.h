@@ -345,9 +345,12 @@ struct collectclientmode : clientmode
         token *t = findtoken(id);
         if(!t) return;
         int team = collectteambase(ci->team);
-        if(t->team != team && (t->team > 0 || -t->team == team) && ci->state.tokens < TOKENLIMIT) ci->state.tokens++;
+        if(t->team != team && (t->team > 0 || -t->team == team) && ci->state.tokens < TOKENLIMIT)
+        {
+            ci->state.tokens++;
+            skullplayer[ci->clientnum] = 1;
+        }
         sendf(-1, 1, "ri4", N_TAKETOKEN, ci->clientnum, id, ci->state.tokens);
-        if(t->team != team && (t->team > 0 || -t->team == team) && ci->state.tokens < TOKENLIMIT)  skullplayer[ci->clientnum] = 1;
     }
 
     void update()
@@ -668,11 +671,11 @@ struct collectclientmode : clientmode
         {
             playsound(t->team == team || (t->team < 0 && -t->team != team) ? S_ITEMAMMO : S_ITEMHEALTH, d!=player1 ? &d->o : NULL);
             removetoken(id);
+            if(t->team != team) skullplayer[d->clientnum] = 1;
         }
         d->tokens = total;
-        if(t && t->team != team) skullplayer[d->clientnum] = 1;
     }
-        
+    
     token *droptoken(fpsent *d, int id, const vec &o, int team, int yaw, int n)
     {
         vec pos = movetoken(o, yaw);

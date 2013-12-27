@@ -6,6 +6,7 @@ namespace game
     VARP(playerniceshot, 0, 0, 128);
     VARP(autosorry, 0, 0, 1);
     VARP(playerslist, 0, 0, 1);
+    VARP(goodgame, 0, 0, 1);
     extern int flagplayer1;
     extern int flagplayer2;
     extern int skullplayer[];
@@ -451,7 +452,7 @@ namespace game
                 playerwhokilled = actor->clientnum;
             }
             else conoutf(contype, "\f2%s fragged a teammate (%s)", aname, dname);
-            actor->teamkils ++;
+            actor->teamkils++;
         }
         else
         {
@@ -511,6 +512,12 @@ namespace game
             float kpd = player1->frags/float(player1->deaths ? player1->deaths : 1);
             conoutf(CON_GAMEINFO, "\f2player total damage dealt: %d, damage wasted: %d, accuracy(%%): %d, kpd: %3.2f", player1->totaldamage, player1->totalshots-player1->totaldamage, accuracy, kpd);
             if(m_sp) spsummary(accuracy);
+
+            if(goodgame && player1->state!=CS_SPECTATOR && player1->state!=CS_EDITING)
+            {
+                defformatstring(gogatt)("Good game !");
+                conoutf(CON_CHAT, "%s:\f0 %s", colorname(player1), gogatt);
+            }
 
             showscores(true);
             disablezoom();
