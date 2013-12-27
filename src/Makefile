@@ -1,7 +1,7 @@
 CXXFLAGS= -O3 -fomit-frame-pointer
 override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
-PLATFORM= $(shell uname -s)
+PLATFORM?= $(shell uname -s)
 PLATFORM_PREFIX= native
 
 INCLUDES= -Ishared -Iengine -Ifpsgame -Ienet/include
@@ -16,7 +16,7 @@ endif
 MV=mv
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
-WINDRES= windres
+WINDRES?= windres
 ifneq (,$(findstring 64,$(PLATFORM)))
 WINLIB=lib64
 WINBIN=../bin64
